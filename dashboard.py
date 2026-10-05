@@ -1,0 +1,478 @@
+"""
+dashboard.py  -  the teacher's control window for the AX4 pen plotter.
+
+    python dashboard.py        (or open it in Thonny and press Run)
+
+Open a student's emailed turtle program, check the preview, and plot it.
+First-time setup: docs/SETUP.md.
+"""
+
+import datetime
+import os
+import queue
+import threading
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+import dashboard_logic as logic
+from grbl_backend import GrblBackend, LETTER_MM, PlotStopped, usable_half
+from plotter import PlotterError, load_config, save_config
+
+PX_PER_MM = 2.0
+JOG_STEPS = (1, 10)
+
+
+class Dashboard:
+
+    def __init__(self, root, backend=None):
+        self.root = root
+        root.title("AX4 Plotter")
+        self.raw_config = load_config()
+        self.config = logic.ax4_config(self.raw_config)
+        self.half = usable_half(margin=float(self.config["margin_mm"]))
+        self.backend = backend or GrblBackend(self.config)
+        self.port = None             # None = find the CH340 automatically
+        self.check = logic.Checklist(self.config)
+        self.strokes = []            # turtle units from the student file
+        self.result = None
+        self.path = None
+        self.plotting = False
+        self.paused = False
+        self._on_done = None
+        self.events = queue.Queue()
+        self._build()
+        self.refresh()
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
+        root.after(100, self._poll)
+
+    # ---- layout ---------------------------------------------------------
+
+    def _build(self):
+        r = self.root
+        top = ttk.Frame(r, padding=6)
+        top.grid(row=0, column=0, columnspan=3, sticky="ew")
+        self.check_labels = {}
+        for i, key in enumerate(("connected", "pen", "origin", "calibrated")):
+            lab = ttk.Label(top, width=30)
+            lab.grid(row=0, column=i, padx=4, sticky="w")
+            self.check_labels[key] = lab
+        self.banner = tk.Label(top, bg="#ffe066", fg="black", anchor="w")
+        self.banner.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(4, 0))
+        self.status = ttk.Label(top, anchor="w")
+        self.status.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(4, 0))
+
+        left = ttk.Frame(r, padding=6)
+        left.grid(row=1, column=0, sticky="ns")
+        self.btn_connect = ttk.Button(left, text="Connect", command=self.on_connect)
+        self.btn_connect.pack(fill="x")
+        ttk.Label(left, text="Move head (pen up)").pack(pady=(12, 0))
+        self.jog_step = tk.IntVar(value=10)
+        steps = ttk.Frame(left)
+        steps.pack()
+        for s in JOG_STEPS:
+            ttk.Radiobutton(steps, text="%d mm" % s, value=s,
+                            variable=self.jog_step).pack(side="left")
+        pad = ttk.Frame(left)
+        pad.pack()
+        self.jog_buttons = []
+        for text, dx, dy, row, col in (("Up", 0, 1, 0, 1), ("Left", -1, 0, 1, 0),
+                                       ("Right", 1, 0, 1, 2), ("Down", 0, -1, 2, 1)):
+            b = ttk.Button(pad, text=text, width=6,
+                           command=lambda dx=dx, dy=dy: self.on_jog(dx, dy))
+            b.grid(row=row, column=col)
+            self.jog_buttons.append(b)
+        self.btn_origin = ttk.Button(left, text="Set origin here",
+                                     command=self.on_set_origin)
+        self.btn_pen_up = ttk.Button(left, text="Pen up",
+                                     command=lambda: self.on_pen(False))
+        self.btn_pen_down = ttk.Button(left, text="Pen down",
+                                       command=lambda: self.on_pen(True))
+        self.btn_change = ttk.Button(left, text="Change pen",
+                                     command=self.on_change_pen)
+        self.btn_pen_setup = ttk.Button(left, text="Pen setup...",
+                                        command=self.on_pen_setup)
+        self.btn_calibrate = ttk.Button(left, text="Calibrate distances...",
+                                        command=self.on_calibrate)
+        for b in (self.btn_origin, self.btn_pen_up, self.btn_pen_down,
+                  self.btn_change, self.btn_pen_setup, self.btn_calibrate):
+            b.pack(fill="x", pady=(8, 0))
+
+        w = int(LETTER_MM[0] * PX_PER_MM) + 20
+        h = int(LETTER_MM[1] * PX_PER_MM) + 20
+        self.canvas = tk.Canvas(r, width=w, height=h, bg="#ddd",
+                                highlightthickness=0)
+        self.canvas.grid(row=1, column=1, padx=6, pady=6)
+
+        right = ttk.Frame(r, padding=6)
+        right.grid(row=1, column=2, sticky="ns")
+        self.file_label = ttk.Label(right, text="No student file open",
+                                    font=("TkDefaultFont", 10, "bold"))
+        self.file_label.pack(anchor="w")
+        self.info = ttk.Label(right, justify="left", wraplength=340)
+        self.info.pack(anchor="w", pady=4)
+        self.code = tk.Text(right, width=50, height=24, font=("Courier", 9),
+                            state="disabled")
+        self.code.pack(fill="both", expand=True)
+
+        bottom = ttk.Frame(r, padding=6)
+        bottom.grid(row=2, column=0, columnspan=3, sticky="ew")
+        ttk.Button(bottom, text="Open student file...",
+                   command=self.on_open).pack(side="left")
+        ttk.Label(bottom, text="   Scale %").pack(side="left")
+        self.scale = tk.IntVar(value=100)
+        sb = ttk.Spinbox(bottom, from_=1, to=logic.MAX_SCALE, width=5,
+                         textvariable=self.scale, command=self.refresh)
+        sb.pack(side="left")
+        sb.bind("<Return>", lambda e: self.refresh())
+        sb.bind("<FocusOut>", lambda e: self.refresh())
+        ttk.Button(bottom, text="Fit to paper",
+                   command=self.on_fit).pack(side="left", padx=2)
+        ttk.Button(bottom, text="Reset 100%",
+                   command=self.on_reset_scale).pack(side="left")
+        self.btn_plot = ttk.Button(bottom, text="Plot", command=self.on_plot)
+        self.btn_pause = ttk.Button(bottom, text="Pause", command=self.on_pause)
+        self.btn_stop = tk.Button(bottom, text="STOP", bg="#d33", fg="white",
+                                  font=("TkDefaultFont", 10, "bold"),
+                                  command=self.on_stop)
+        self.btn_svg = ttk.Button(bottom, text="Save SVG...",
+                                  command=self.on_save_svg)
+        for b in (self.btn_plot, self.btn_pause, self.btn_stop, self.btn_svg):
+            b.pack(side="left", padx=4)
+        self.progress = ttk.Progressbar(bottom, length=220)
+        self.progress.pack(side="left", padx=8)
+
+    # ---- state ----------------------------------------------------------
+
+    def _scale(self):
+        try:
+            v = int(self.scale.get())
+        except (tk.TclError, ValueError):
+            v = 100
+        return max(1, min(logic.MAX_SCALE, v))
+
+    def strokes_mm(self):
+        return logic.to_mm(self.strokes, self._scale())
+
+    def _sync_from_backend(self):
+        self.check.connected = self.backend.connected
+        self.check.origin_set = self.backend.origin_set
+
+    def refresh(self):
+        c = self.check
+        tick = lambda ok: "[x] " if ok else "[ ] "
+        self.check_labels["connected"].config(text=tick(c.connected) + "Connected to AX4")
+        self.check_labels["pen"].config(text=tick(c.pen_setup_done) + "Pen set up")
+        self.check_labels["origin"].config(text=tick(c.origin_set) + "Origin set")
+        self.check_labels["calibrated"].config(
+            text=tick(c.calibrated) + ("Calibrated %s" % c.calibrated
+                                       if c.calibrated else "Distances calibrated"))
+        if c.banner:
+            self.banner.config(text=c.banner)
+            self.banner.grid()
+        else:
+            self.banner.grid_remove()
+
+        mm = self.strokes_mm()
+        blocker = logic.plot_blocker(c, mm, self.half)
+        idle = not self.plotting
+        ready = c.connected and idle
+        self.btn_connect.config(text="Disconnect" if c.connected else "Connect",
+                                state="normal" if idle else "disabled")
+        for b in self.jog_buttons + [self.btn_origin, self.btn_pen_up,
+                                     self.btn_pen_down, self.btn_change,
+                                     self.btn_pen_setup, self.btn_calibrate]:
+            b.config(state="normal" if ready else "disabled")
+        self.btn_plot.config(state="normal" if idle and blocker is None else "disabled")
+        self.btn_pause.config(state="normal" if self.plotting else "disabled",
+                              text="Resume" if self.paused else "Pause")
+        self.btn_svg.config(state="normal" if mm and idle else "disabled")
+        if idle:
+            self.status.config(text=blocker or "Ready to plot.")
+        self._draw_preview(mm)
+        self._show_info(mm)
+
+    def _draw_preview(self, mm):
+        cv = self.canvas
+        cv.delete("all")
+        k = PX_PER_MM
+        ox = 10 + LETTER_MM[0] * k / 2
+        oy = 10 + LETTER_MM[1] * k / 2
+
+        def px(x, y):
+            return ox + x * k, oy - y * k
+
+        cv.create_rectangle(*px(-LETTER_MM[0] / 2, LETTER_MM[1] / 2),
+                            *px(LETTER_MM[0] / 2, -LETTER_MM[1] / 2),
+                            fill="white", outline="#999")
+        hx, hy = self.half
+        cv.create_rectangle(*px(-hx, hy), *px(hx, -hy), outline="#9bd",
+                            dash=(4, 3))
+        cv.create_line(*px(-4, 0), *px(4, 0), fill="#c33")
+        cv.create_line(*px(0, -4), *px(0, 4), fill="#c33")
+        greyed = bool(self.result and self.result.get("error"))
+        for s in mm:
+            for a, b in zip(s, s[1:]):
+                bad = not (logic.inside(a, self.half) and logic.inside(b, self.half))
+                colour = "red" if bad else ("#999" if greyed else "black")
+                cv.create_line(*px(*a), *px(*b), fill=colour,
+                               width=2 if bad else 1)
+
+    def _show_info(self, mm):
+        if self.result is None:
+            self.info.config(text="")
+            return
+        w, h = logic.size_mm(mm)
+        secs = logic.estimate_seconds(mm, self.config["draw_feed"],
+                                      self.config["travel_feed"],
+                                      self.config["servo_wait_s"])
+        lines = ["%d strokes, %.0f x %.0f mm at %d%%" % (len(mm), w, h, self._scale()),
+                 "Estimated time: %s" % logic.format_time(secs)]
+        lines += ["Warning: " + x for x in self.result.get("warnings", [])]
+        err = logic.error_text(self.result.get("error"))
+        if err:
+            lines.append("ERROR: " + err)
+        self.info.config(text="\n".join(lines))
+
+    # ---- helpers used by the wizards ----------------------------------
+
+    def save_setting(self, **values):
+        self.raw_config.update(values)
+        self.config.update(values)
+        save_config(self.raw_config)
+
+    def mark_pen_setup(self):
+        today = datetime.date.today().isoformat()
+        self.save_setting(pen_setup_done=today)
+        self.check.pen_setup_done = today
+        self.refresh()
+
+    def mark_calibrated(self):
+        today = datetime.date.today().isoformat()
+        self.save_setting(calibrated=today)
+        self.check.calibrated = today
+        self.refresh()
+
+    def _try(self, action, *args):
+        """Run a backend action from a button; show problems in a dialog."""
+        try:
+            action(*args)
+        except PlotterError as e:
+            messagebox.showerror("Plotter", str(e), parent=self.root)
+        self._sync_from_backend()
+        self.refresh()
+
+    # ---- buttons --------------------------------------------------------
+
+    def on_connect(self):
+        if self.check.connected:
+            self.backend.close()
+            self._sync_from_backend()
+            self.refresh()
+            return
+        self.status.config(text="Connecting...")
+        self.root.update_idletasks()
+        self._try(self.backend.connect, self.port)
+
+    def on_jog(self, dx, dy):
+        step = self.jog_step.get()
+        self._try(self.backend.jog, dx * step, dy * step)
+
+    def on_set_origin(self):
+        if messagebox.askokcancel(
+                "Set origin",
+                "Is the sheet centred on the plotter bed, and the pen over "
+                "the centre of the sheet?", parent=self.root):
+            self._try(self.backend.set_origin)
+
+    def on_pen(self, down):
+        self._try(self.backend.pen, down)
+
+    def on_change_pen(self):
+        if not self.backend.origin_set:
+            messagebox.showinfo("Change pen", "Set the origin first, so the "
+                                "head knows where the sheet is.", parent=self.root)
+            return
+        feed = self.config["travel_feed"]
+
+        def go():
+            self.backend.pen(False)
+            self.backend.move(0.0, -self.half[1], feed)
+            self.backend.wait()
+            messagebox.showinfo("Change pen", "Swap the pen, then click OK.\n"
+                                "The head will go back to the centre.",
+                                parent=self.root)
+            self.backend.move(0.0, 0.0, feed)
+            self.backend.wait()
+        self._try(go)
+
+    def on_pen_setup(self):
+        from dashboard_wizards import PenSetupWizard
+        PenSetupWizard(self)
+
+    def on_calibrate(self):
+        from dashboard_wizards import CalibrationWizard
+        CalibrationWizard(self)
+
+    def on_open(self):
+        path = filedialog.askopenfilename(
+            parent=self.root, title="Open a student's turtle program",
+            filetypes=[("Python files", "*.py"), ("All files", "*.*")])
+        if path:
+            self.load_file(path)
+
+    def load_file(self, path):
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                source = f.read()
+        except OSError as e:
+            messagebox.showerror("Open", str(e), parent=self.root)
+            return
+        self.path = path
+        self.file_label.config(text=os.path.basename(path))
+        self.code.config(state="normal")
+        self.code.delete("1.0", "end")
+        self.code.insert("1.0", source)
+        self.code.config(state="disabled")
+        self.status.config(text="Running the student's program...")
+        self.root.config(cursor="watch")
+        self.root.update_idletasks()
+        try:
+            self.result = logic.run_student(path)
+        finally:
+            self.root.config(cursor="")
+        self.strokes = self.result.get("strokes", [])
+        self.scale.set(100)
+        self.refresh()
+
+    def on_fit(self):
+        self.scale.set(logic.fit_scale(self.strokes, self.half))
+        self.refresh()
+
+    def on_reset_scale(self):
+        self.scale.set(100)
+        self.refresh()
+
+    def on_plot(self):
+        mm = self.strokes_mm()
+        if logic.plot_blocker(self.check, mm, self.half):
+            return
+        name = os.path.basename(self.path) if self.path else "drawing"
+        self.start_job(mm, "Plotting " + name)
+
+    def start_job(self, strokes_mm, label, on_done=None):
+        """Plot in a worker thread; results come back through self.events."""
+        self.plotting = True
+        self.paused = False
+        self._on_done = on_done
+        self.progress.config(maximum=max(1, len(strokes_mm)), value=0)
+        self.status.config(text=label + "...")
+
+        def work():
+            try:
+                logic.plot_strokes(
+                    self.backend, strokes_mm, self.config["draw_feed"],
+                    self.config["travel_feed"],
+                    progress=lambda i, n: self.events.put(("progress", i, n)))
+                self.events.put(("done",))
+            except PlotStopped:
+                try:
+                    self.backend.recover()
+                    self.events.put(("stopped",))
+                except PlotterError as e:
+                    self.events.put(("error", e))
+            except PlotterError as e:
+                self.events.put(("error", e))
+
+        threading.Thread(target=work, daemon=True).start()
+        self.refresh()
+
+    def _poll(self):
+        try:
+            while True:
+                ev = self.events.get_nowait()
+                if ev[0] == "progress":
+                    self.progress.config(value=ev[1])
+                    self.status.config(text="Stroke %d of %d" % (ev[1], ev[2]))
+                    continue
+                self.plotting = False
+                self.paused = False
+                self._sync_from_backend()
+                callback, self._on_done = self._on_done, None
+                self.refresh()
+                if ev[0] == "done":
+                    self.status.config(text="Finished.")
+                    if callback:
+                        callback()
+                elif ev[0] == "stopped":
+                    messagebox.showinfo(
+                        "Stopped", "Plot stopped.  The pen is up.\nSet the "
+                        "origin again before the next plot.", parent=self.root)
+                else:
+                    messagebox.showerror("Plotter", str(ev[1]), parent=self.root)
+        except queue.Empty:
+            pass
+        self.root.after(100, self._poll)
+
+    def on_pause(self):
+        if not self.plotting:
+            return
+        try:
+            if self.paused:
+                self.backend.resume()
+            else:
+                self.backend.pause()
+            self.paused = not self.paused
+        except PlotterError as e:
+            messagebox.showerror("Plotter", str(e), parent=self.root)
+        self.refresh()
+
+    def on_stop(self):
+        if not self.backend.connected:
+            return
+        try:
+            self.backend.stop()
+            if not self.plotting:
+                self.backend.recover()
+        except PlotterError as e:
+            messagebox.showerror("Plotter", str(e), parent=self.root)
+        self.paused = False
+        self._sync_from_backend()
+        self.refresh()
+
+    def on_save_svg(self):
+        base = os.path.splitext(os.path.basename(self.path or "drawing"))[0]
+        path = filedialog.asksaveasfilename(
+            parent=self.root, defaultextension=".svg",
+            initialfile=base + ".svg", filetypes=[("SVG drawing", "*.svg")])
+        if not path:
+            return
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(logic.svg_text(self.strokes_mm()))
+        self.status.config(text="Saved " + path)
+
+    def on_close(self):
+        if self.plotting:
+            if not messagebox.askyesno("Quit", "A plot is running.  Stop the "
+                                       "plot and quit?", parent=self.root):
+                return
+            try:
+                self.backend.stop()
+            except PlotterError:
+                pass
+        elif self.backend.connected:
+            try:
+                self.backend.pen(False)
+            except PlotterError:
+                pass
+        self.backend.close()
+        self.root.destroy()
+
+
+def main():
+    root = tk.Tk()
+    Dashboard(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
