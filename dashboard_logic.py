@@ -176,6 +176,34 @@ def plot_blocker(checklist, strokes_mm, half):
     return None
 
 
+# ---- typed text ------------------------------------------------------------
+
+def text_strokes(text):
+    """Typed text in write_name.py's single-stroke font, centred on 0,0.
+
+    Returns (strokes in turtle units, sorted list of characters the font
+    doesn't have).  If any are missing, strokes is empty.  At 100% the
+    capitals are 15 mm tall, the same as write_name.py.
+    """
+    from write_name import GAP, GLYPHS, UNIT
+    missing = sorted({ch for ch in text if ch not in GLYPHS})
+    if missing:
+        return [], missing
+    strokes, x = [], 0.0
+    for ch in text:
+        width, glyph = GLYPHS[ch]
+        for s in glyph:
+            strokes.append([((x + px) * UNIT, py * UNIT) for px, py in s])
+        x += width + GAP
+    if not strokes:
+        return [], []
+    xs = [p[0] for s in strokes for p in s]
+    ys = [p[1] for s in strokes for p in s]
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    return [[((px - cx) / STEP_MM, (py - cy) / STEP_MM) for px, py in s]
+            for s in strokes], []
+
+
 # ---- calibration and test drawings -----------------------------------------
 
 def calibration_result(current, measured_x, measured_y, target=CAL_MM):

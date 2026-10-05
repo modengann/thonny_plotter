@@ -119,6 +119,41 @@ class TestReviewFixes(unittest.TestCase):
             root.destroy()
 
 
+class TestTextBox(unittest.TestCase):
+
+    def test_typed_text_becomes_a_plottable_drawing(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.check.pen_setup_done = "x"
+            d.on_connect()
+            d.backend.set_origin()
+            d.check.origin_set = True
+            d.text.set("Gabe Cahill")
+            d.on_use_text()
+            self.assertTrue(d.strokes)
+            self.assertEqual(str(d.btn_plot["state"]), "normal")
+            d.on_plot()
+            pump(root, lambda: not d.plotting)
+            self.assertFalse(d.plotting)
+        finally:
+            root.destroy()
+
+    def test_unknown_characters_are_explained(self):
+        root, d = make(FakeGrbl())
+        shown = []
+        saved = dashboard.messagebox.showerror
+        dashboard.messagebox.showerror = lambda *a, **k: shown.append(a)
+        try:
+            d.text.set("Room 12")
+            d.on_use_text()
+            self.assertEqual(d.strokes, [])
+            self.assertIn("1, 2", shown[0][1])
+        finally:
+            dashboard.messagebox.showerror = saved
+            root.destroy()
+
+
 class TestWizards(unittest.TestCase):
 
     def test_pen_setup_lifts_then_goes_to_touch_position(self):

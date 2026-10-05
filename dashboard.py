@@ -119,6 +119,13 @@ class Dashboard:
         bottom.grid(row=2, column=0, columnspan=3, sticky="ew")
         ttk.Button(bottom, text="Open student file...",
                    command=self.on_open).pack(side="left")
+        ttk.Label(bottom, text="   or text:").pack(side="left")
+        self.text = tk.StringVar()
+        entry = ttk.Entry(bottom, textvariable=self.text, width=22)
+        entry.pack(side="left")
+        entry.bind("<Return>", lambda e: self.on_use_text())
+        ttk.Button(bottom, text="Use text",
+                   command=self.on_use_text).pack(side="left", padx=2)
         ttk.Label(bottom, text="   Scale %").pack(side="left")
         self.scale = tk.IntVar(value=100)
         sb = ttk.Spinbox(bottom, from_=1, to=logic.MAX_SCALE, width=5,
@@ -342,6 +349,29 @@ class Dashboard:
         finally:
             self.root.config(cursor="")
         self.strokes = self.result.get("strokes", [])
+        self.scale.set(100)
+        self.refresh()
+
+    def on_use_text(self):
+        """Plot typed text instead of a student file."""
+        text = self.text.get().strip()
+        if not text:
+            return
+        strokes, missing = logic.text_strokes(text)
+        if missing:
+            messagebox.showerror(
+                "Text", "The plotter's font has no letter for: %s\n"
+                "It has A-Z, a-z and spaces." % ", ".join(missing),
+                parent=self.root)
+            return
+        self.path = None
+        self.strokes = strokes
+        self.result = {"strokes": strokes, "warnings": [], "error": None}
+        self.file_label.config(text="Text: " + text)
+        self.code.config(state="normal")
+        self.code.delete("1.0", "end")
+        self.code.insert("1.0", text)
+        self.code.config(state="disabled")
         self.scale.set(100)
         self.refresh()
 

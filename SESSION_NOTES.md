@@ -166,6 +166,10 @@ banner reminds); (2) watch for the origin clearing itself after a plot - happene
 once on hardware, not reproducible offline, see HARDWARE_NOTES; (3) merge branch
 `ax4-dashboard` into master when the teacher says so; (4) deferred minors in the
 ledger.
+Dashboard text box (2026-10-05): type text, 'Use text' -> plots in the
+write_name.py stroke font, centred on the origin, Scale/Fit apply. Letters
+only (A-Z, a-z, space, 7 Hangeul blocks); digits/punctuation NOT added (teacher
+said text only for now).
 Classroom workflow: Candle off -> dashboard.py -> Connect -> sheet centred ->
 jog to centre -> Set origin -> Open student file -> Plot; swap sheets between
 students without moving the head (plots end at the centre).

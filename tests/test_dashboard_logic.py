@@ -163,6 +163,34 @@ class TestSvg(unittest.TestCase):
         self.assertIn("M 139.700,107.950 L 149.700,97.950", text)
 
 
+class TestText(unittest.TestCase):
+
+    def test_text_is_centred_on_the_origin(self):
+        strokes, missing = logic.text_strokes("Kim")
+        self.assertEqual(missing, [])
+        xs = [x for s in strokes for x, _ in s]
+        ys = [y for s in strokes for _, y in s]
+        self.assertAlmostEqual((min(xs) + max(xs)) / 2, 0)
+        self.assertAlmostEqual((min(ys) + max(ys)) / 2, 0)
+
+    def test_capitals_are_15mm_tall_at_100_percent(self):
+        strokes, _ = logic.text_strokes("I")
+        self.assertAlmostEqual(logic.size_mm(logic.to_mm(strokes, 100))[1], 15)
+
+    def test_unknown_characters_are_listed_once(self):
+        strokes, missing = logic.text_strokes("Room 12!1")
+        self.assertEqual(missing, ["!", "1", "2"])
+        self.assertEqual(strokes, [])
+
+    def test_empty_text_draws_nothing(self):
+        self.assertEqual(logic.text_strokes(""), ([], []))
+
+    def test_hangeul_blocks_work(self):
+        strokes, missing = logic.text_strokes("김세정")
+        self.assertEqual(missing, [])
+        self.assertTrue(strokes)
+
+
 class TestRunStudent(unittest.TestCase):
 
     def test_good_file(self):
