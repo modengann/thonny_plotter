@@ -21,6 +21,7 @@ class FakeGrbl:
         self.read_delay = read_delay
         self.fail_reads = False
         self.closed = False
+        self.on_line = None     # test hook: called with each text line
         self._pending = ["", BANNER] if banner else []
 
     def write(self, data):
@@ -36,6 +37,8 @@ class FakeGrbl:
             return 1
         line = data.decode("ascii").strip()
         self.sent.append(line)
+        if self.on_line:
+            self.on_line(line)
         for prefix, lines in self.replies.items():
             if line.startswith(prefix):
                 self._pending += list(lines)

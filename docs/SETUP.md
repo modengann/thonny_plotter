@@ -247,6 +247,12 @@ Once, and if drawings measure wrong: **Calibrate distances...** (draws an
 L, you measure it with a ruler). The yellow NOT CALIBRATED bar stays until
 this is done.
 
+Running `Plotter(live=True)` from Thonny instead of the dashboard: the AX4
+resets when a program connects, so **wherever the pen is when the program
+starts becomes the centre of the paper**. Move it to the centre first
+(dashboard arrows, then Disconnect), especially after a program crashed
+part-way.
+
 Students: write normal turtle programs (`import turtle`) and email the .py
 file. They do not need plotter.py. `input()`, colours, fills and text are
 not plotted; the dashboard says so.

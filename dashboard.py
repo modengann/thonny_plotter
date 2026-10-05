@@ -39,6 +39,7 @@ class Dashboard:
         self.plotting = False
         self.paused = False
         self._on_done = None
+        self._worker = None          # the plot thread, while one runs
         self.events = queue.Queue()
         self._build()
         self.refresh()
@@ -383,10 +384,17 @@ class Dashboard:
             except PlotterError as e:
                 self.events.put(("error", e))
 
-        threading.Thread(target=work, daemon=True).start()
+        self._worker = threading.Thread(target=work, daemon=True)
+        self._worker.start()
         self.refresh()
 
     def _poll(self):
+        try:
+            self._handle_events()
+        finally:                 # keep polling even if a callback fails
+            self.root.after(100, self._poll)
+
+    def _handle_events(self):
         try:
             while True:
                 ev = self.events.get_nowait()
@@ -411,7 +419,6 @@ class Dashboard:
                     messagebox.showerror("Plotter", str(ev[1]), parent=self.root)
         except queue.Empty:
             pass
-        self.root.after(100, self._poll)
 
     def on_pause(self):
         if not self.plotting:
@@ -431,7 +438,10 @@ class Dashboard:
             return
         try:
             self.backend.stop()
-            if not self.plotting:
+            # Recover here unless a running plot thread will do it.  Don't go
+            # by self.plotting: it lags the thread by up to one poll.
+            worker = self._worker
+            if worker is None or not worker.is_alive():
                 self.backend.recover()
         except PlotterError as e:
             messagebox.showerror("Plotter", str(e), parent=self.root)

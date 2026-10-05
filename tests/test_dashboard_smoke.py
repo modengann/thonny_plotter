@@ -85,6 +85,40 @@ class TestDashboard(unittest.TestCase):
             root.destroy()
 
 
+class TestReviewFixes(unittest.TestCase):
+
+    def test_stop_after_worker_finished_still_recovers(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            d.plotting = True        # "done" queued but not yet polled
+            d._worker = None         # no thread left to call recover()
+            fake.sent.clear()
+            d.on_stop()
+            self.assertIn("$X", fake.sent)
+            self.assertFalse(d.backend._stopping)
+        finally:
+            root.destroy()
+
+    def test_poll_survives_a_failing_callback(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            d.backend.set_origin()
+
+            def broken():
+                raise tk.TclError("wizard window was closed")
+            d.start_job([[(0, 0), (5, 0)]], "test", on_done=broken)
+            pump(root, lambda: not d.plotting)
+            d.start_job([[(0, 0), (5, 0)]], "again")
+            pump(root, lambda: not d.plotting)
+            self.assertFalse(d.plotting)       # second job was noticed
+        finally:
+            root.destroy()
+
+
 class TestWizards(unittest.TestCase):
 
     def test_pen_setup_lifts_then_goes_to_touch_position(self):

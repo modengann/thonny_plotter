@@ -343,8 +343,12 @@ class Plotter(turtle.Turtle):
         if grbl is not None:
             # AX4: paper coordinates, origin at the paper centre, no clamp
             grbl.pen(down)
-            grbl.move(end[0] * self.scale, end[1] * self.scale,
-                      self.draw_feed if down else self.travel_feed)
+            try:
+                grbl.move(end[0] * self.scale, end[1] * self.scale,
+                          self.draw_feed if down else self.travel_feed)
+            except PlotterError:
+                grbl.pen(False)      # never leave the pen pressed on the paper
+                raise
             if self.lockstep:
                 grbl.wait()
         elif self.ser is not None:

@@ -106,6 +106,8 @@ class PenSetupWizard(Wizard):
                             on_done=self.s5)
 
     def s5(self):
+        if not self.winfo_exists():      # wizard closed while drawing
+            return
         self.step("What do you see on the paper?",
                   [("Solid lines", self.done),
                    ("Faint, gaps or nothing", self.too_high),
@@ -177,6 +179,8 @@ class CalibrationWizard(Wizard):
                             on_done=self.s2)
 
     def s2(self):
+        if not self.winfo_exists():      # wizard closed while drawing
+            return
         self.step("Step 2 of 3\n\n"
                   "With a ruler, measure each line from the corner of the L "
                   "to the middle of its tick.  Type the lengths in "

@@ -158,6 +158,12 @@ class GrblBackend:
 
     def _cmd(self, line, timeout=CMD_TIMEOUT):
         """Send one line and wait for "ok".  Returns the other lines seen."""
+        # GRBL ignores "!" while idle (between strokes, during a servo
+        # dwell), so Pause also holds the next command here on the computer.
+        while self.paused and not self._stopping:
+            time.sleep(0.05)
+        if self._stopping:
+            raise PlotStopped("Stopped.")
         self._write((line + "\n").encode("ascii"))
         got = []
         deadline = time.time() + timeout
@@ -255,12 +261,22 @@ class GrblBackend:
         self.origin_set = False
 
     def recover(self):
-        """After stop(): wait for the reset banner, unlock, mm + absolute."""
-        self._wait_banner(2.0)
-        self._stopping = False
-        self._cmd("$X")
-        self._cmd("G21")
-        self._cmd("G90")
+        """After stop(): wait for the reset banner, unlock, mm + absolute.
+
+        Retries if STOP is pressed again while this runs (a double click).
+        """
+        for _ in range(3):
+            self._wait_banner(2.0)
+            self._stopping = False
+            try:
+                self._cmd("$X")
+                self._cmd("G21")
+                self._cmd("G90")
+                return
+            except PlotStopped:
+                continue
+        raise PlotterError("The plotter didn't recover after STOP.  Click "
+                           "Disconnect, then Connect.")
 
     # ---- settings -------------------------------------------------------
 

@@ -226,11 +226,60 @@ class TestStopAndPause(unittest.TestCase):
     def test_pause_extends_the_deadline(self):
         slow = {"G4 P0": [""] * 10 + ["ok"]}
         b, fake = connected(FakeGrbl(replies=slow, read_delay=0.05))
-        b.paused = True
+        # Pause lands after the command has gone out (mid-move).
+        fake.on_line = lambda line: setattr(b, "paused", True)
         b._cmd("G4 P0", timeout=0.2)        # 0.55 s of silence: still fine
+        fake.on_line = None
         b.paused = False
         with self.assertRaises(PlotterError):
             b._cmd("G4 P0", timeout=0.2)
+
+
+class TestReviewFixes(unittest.TestCase):
+
+    def test_recover_survives_a_second_stop(self):
+        b, fake = connected()
+        b.stop()
+        seen = []
+
+        def second_click(line):          # STOP pressed again mid-recovery
+            if line == "$X" and not seen:
+                seen.append(line)
+                b._stopping = True
+        fake.on_line = second_click
+        b.recover()
+        self.assertFalse(b._stopping)
+        b.wait()                          # usable again
+
+    def test_pause_holds_the_next_command_on_the_computer(self):
+        import threading, time
+        b, fake = connected()
+        b.pause()
+        t = threading.Thread(target=b.wait)
+        t.start()
+        time.sleep(0.3)
+        self.assertNotIn("G4 P0", fake.sent)      # held while paused
+        b.resume()
+        t.join(5)
+        self.assertIn("G4 P0", fake.sent)
+
+    def test_stop_releases_a_command_held_by_pause(self):
+        import threading, time
+        b, fake = connected()
+        b.pause()
+        errors = []
+
+        def run():
+            try:
+                b.wait()
+            except PlotStopped as e:
+                errors.append(e)
+        t = threading.Thread(target=run)
+        t.start()
+        time.sleep(0.2)
+        b.stop()
+        t.join(5)
+        self.assertEqual(len(errors), 1)
 
 
 class TestFinish(unittest.TestCase):
