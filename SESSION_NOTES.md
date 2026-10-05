@@ -149,12 +149,23 @@ Next AX4 steps: (3) GRBL backend in plotter.py (G4 P0 lockstep, M3/M5 pen, clamp
 All 4 design sections agreed. **Spec written:**
 `docs/superpowers/specs/2026-10-04-ax4-dashboard-design.md` (not a git repo;
 teacher will commit). Spec approved by the teacher.
-**Plan written:** `docs/superpowers/plans/2026-10-04-ax4-dashboard.md`
-(7 tasks: grbl_backend, Plotter AX4 path + config, run_turtle, dashboard_logic,
-dashboard window, wizards, docs + staged hardware acceptance). Waiting on the
-teacher's plan review and choice of execution method. No code yet.
-Plan deviation (explained in the plan): Prusa code stays inside Plotter
-instead of a MiniBackend class, so the 45 existing tests stay untouched.
+**Plan written:** `docs/superpowers/plans/2026-10-04-ax4-dashboard.md`.
+**BUILD STATUS (2026-10-04):** git repo created by teacher; work is on branch
+`ax4-dashboard`, one commit per task. Tasks 1-6 DONE + Task 7 step 1 (SETUP.md).
+128 offline tests pass (`bash .superpowers/sdd/2026-10-04-ax4-dashboard/suite.sh`,
+or run each `python tests/test_*.py`). New files: grbl_backend.py,
+run_turtle.py, dashboard_logic.py, dashboard.py, dashboard_wizards.py,
+tests/fake_grbl.py, tests/samples/. plotter_config.json now backend=grbl.
+Final whole-branch review DONE (fresh reviewer): 0 critical, 4 important
+(all fixed with failing-test-first, commit 8a98488), 8 minors deferred (listed
+in the ledger). 128 offline tests pass.
+**NEXT: Task 7 steps 2-8 = hardware acceptance, teacher at the plotter, explicit
+"go" per stage:** connect / pen setup wizard / origin + square plot / STOP
+mid-plot (record GRBL state after Ctrl-X) / calibration wizard. Then record
+results in HARDWARE_NOTES.md and merge decision (finishing-a-development-branch).
+Progress ledger (git-ignored): .superpowers/sdd/2026-10-04-ax4-dashboard/progress.md
+Plan deviation: Prusa code stays inside Plotter (no MiniBackend class) so the
+45 original tests are untouched.
 
 Agreed so far:
 - Students do NOT install anything. They write plain `import turtle`
