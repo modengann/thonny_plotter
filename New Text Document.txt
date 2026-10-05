@@ -1,0 +1,41 @@
+I'm a CS teacher building a proof of concept: Python turtle drawings that plot live, in code order, on a Prusa MINI used as a pen plotter. If this works, it becomes student work for a 5-student intro Python class (Q2, Turtle unit covering functions, parameters, lists). Students use Thonny on their own Mac/Windows laptops. Build everything so it can transition to students without redesign.
+
+## What exists
+- plotter.py: a Plotter class subclassing turtle.Turtle. It overrides _goto to record strokes and, when connected, sends each move as G1 + M400 over pyserial so the pen stays in lockstep with the code. It exports SVG (mm, drawing order, one path per stroke) and standalone G-code. CLI flags: --ports, --jog.
+- demo_spiral.py: sample student program.
+- Known bug: self.strokes is never appended to, so exports are empty. Fix it in _goto when a new stroke starts.
+
+## Hardware
+- Prusa MINI (Buddy firmware), connected via the micro-USB serial port, 115200 baud.
+- Heaters off. Pen up/down are Z moves. Paper is a 150 mm square centered on the 180x180 bed.
+- A spring-loaded pen holder is mounted beside the extruder. G28 Z-homing may push the pen into the bed, which is a collision risk.
+
+## Rules for working with the hardware
+- Never run anything that moves the printer (homing, G1, jog) without telling me first and waiting for my OK. I'll be at the printer with my hand on the power switch.
+- Before any G28, ask me to confirm the pen is retracted or removed.
+- Read-only serial actions (listing ports, M115) are fine after I say the cable is connected.
+- Log every hardware finding (firmware version, responses, quirks, timings) in docs/HARDWARE_NOTES.md as you go.
+
+## Phases (stop and report after each)
+1. Offline. Fix the strokes bug. Run the demo headless if possible, or tell me how to check it, and verify the SVG and G-code contain real strokes with sane coordinates. Add a small offline test that checks the exports without hardware.
+2. Connection. Find the port, open it, send M115, and report the firmware response. Handle Buddy's non-"ok" chatter (busy, echo, temps) robustly.
+3. Scripted motion test. Replace interactive jog for this phase with a non-interactive script: connect, home (after my confirmation), move Z to 10, then 5, move XY to the four paper corners at a safe Z, then finish. Report timings and any errors.
+4. Calibration tool. A teacher script that walks me through finding pen_down_z, pen_up_z, and pen_offset, and saves them to a small config file (JSON is fine) that Plotter loads automatically. Student code should not need to contain calibration numbers.
+5. Live demo. Run demo_spiral.py live, with the pen out first, then with the pen in.
+
+## Design requirements for student deployment
+- The student-facing API is plain turtle, plus Plotter(live=...), save_svg, save_gcode, and finish. Do not add concepts students must learn beyond that.
+- plotter.py should remain a single file a student can drop next to their script. Keep internals readable, since advanced students may read it later.
+- Isolate hardware behind a small backend interface (connect, pen up/down, move, finish) with the MINI as the first backend, so an iDraw (EBB/AxiDraw-compatible) or NextDraw backend can be added later without changing student code. Don't implement those backends now.
+- Dependencies: standard library plus pyserial only. It must run in Thonny's bundled Python on Mac and Windows. Tell me which Python you're using versus what Thonny uses.
+- Error messages must be student-friendly and actionable: printer not found, port busy (another student is connected), charge-only cable, drawing clamped at the paper edge, pyserial missing. No raw tracebacks for expected failures.
+- Screen-only mode must work with no printer and no pyserial.
+- Only one student can use the printer at a time. Make that failure clear and safe.
+
+## Folder layout when done
+- student/: plotter.py, demo_spiral.py, and 2-3 short starter examples that use functions, parameters, and lists.
+- teacher/: calibration tool, motion test, port finder.
+- tests/: offline tests.
+- docs/: HARDWARE_NOTES.md, and a SETUP.md written for me covering Thonny, pyserial, cable, calibration, a first-run checklist, and troubleshooting.
+
+Start with phase 1. Ask me before making any architectural choice that isn't covered here.

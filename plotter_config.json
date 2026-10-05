@@ -1,0 +1,9 @@
+{
+  "_comment": "Written by the calibration tool. Students never edit this.",
+  "_status": "AIR TEST ONLY - no pen fitted, heights are deliberately high",
+  "draw_feed": 1500,
+  "pen_down_z": 10.0,
+  "pen_offset": [0.0, 0.0],
+  "pen_up_z": 15.0,
+  "travel_feed": 3000
+}
