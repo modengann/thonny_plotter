@@ -282,6 +282,38 @@ class TestReviewFixes(unittest.TestCase):
         self.assertEqual(len(errors), 1)
 
 
+class TestHoldToJog(unittest.TestCase):
+
+    def test_position_comes_from_the_status_report(self):
+        b, fake = connected()
+        b.move(12.5, -3, 1500)
+        self.assertEqual(b.position(), (12.5, -3.0))
+
+    def test_moves_in_short_steps_while_held(self):
+        import time
+        b, fake = connected()
+        until = time.time() + 0.3
+        b.jog_hold(1, 0, lambda: time.time() < until)
+        moves = [l for l in fake.sent if l.startswith("G1")]
+        self.assertGreaterEqual(len(moves), 2)
+        self.assertTrue(all(l == "G1 X3.000 Y0.000 F900" for l in moves))
+        self.assertEqual(fake.sent[0], "G91")
+        self.assertEqual(fake.sent[-2:], ["G90", "G4 P0"])
+
+    def test_stops_at_the_distance_cap(self):
+        b, fake = connected()
+        b.jog_hold(0, -1, lambda: True, max_mm=9)
+        moves = [l for l in fake.sent if l.startswith("G1")]
+        self.assertEqual(moves, ["G1 X0.000 Y-3.000 F900"] * 3)
+
+    def test_lifts_the_pen_first(self):
+        b, fake = connected()
+        b.pen(True)
+        fake.sent.clear()
+        b.jog_hold(1, 0, lambda: False)
+        self.assertEqual(fake.sent[:3], ["G4 P0", "M5", "G4 P0.30"])
+
+
 class TestFinish(unittest.TestCase):
 
     def test_finish_lifts_pen_returns_to_origin_and_closes(self):

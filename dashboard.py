@@ -42,6 +42,9 @@ class Dashboard:
         self._on_done = None
         self._worker = None          # the plot thread, while one runs
         self._job = None             # timing of the plot in progress
+        self.jogging = False         # a hold-to-move jog is running
+        self._jog_held = False       # an arrow button is pressed right now
+        self._jog_timer = None       # pending "start holding" callback
         self.events = queue.Queue()
         self._build()
         self.refresh()
@@ -80,8 +83,11 @@ class Dashboard:
         self.jog_buttons = []
         for text, dx, dy, row, col in (("Up", 0, 1, 0, 1), ("Left", -1, 0, 1, 0),
                                        ("Right", 1, 0, 1, 2), ("Down", 0, -1, 2, 1)):
-            b = ttk.Button(pad, text=text, width=6,
-                           command=lambda dx=dx, dy=dy: self.on_jog(dx, dy))
+            # click = one step; hold = keep moving until let go
+            b = ttk.Button(pad, text=text, width=6)
+            b.bind("<ButtonPress-1>",
+                   lambda e, dx=dx, dy=dy: self.on_jog_press(dx, dy))
+            b.bind("<ButtonRelease-1>", lambda e: self.on_jog_release())
             b.grid(row=row, column=col)
             self.jog_buttons.append(b)
         self.btn_origin = ttk.Button(left, text="Set origin here",
@@ -184,13 +190,16 @@ class Dashboard:
 
         mm = self.strokes_mm()
         blocker = logic.plot_blocker(c, mm, self.half)
-        idle = not self.plotting
+        idle = not self.plotting and not self.jogging
         ready = c.connected and idle
         self.btn_connect.config(text="Disconnect" if c.connected else "Connect",
                                 state="normal" if idle else "disabled")
-        for b in self.jog_buttons + [self.btn_origin, self.btn_pen_up,
-                                     self.btn_pen_down, self.btn_change,
-                                     self.btn_pen_setup, self.btn_calibrate]:
+        for b in self.jog_buttons:       # stay live while held
+            b.config(state="normal" if c.connected and not self.plotting
+                     else "disabled")
+        for b in [self.btn_origin, self.btn_pen_up,
+                  self.btn_pen_down, self.btn_change,
+                  self.btn_pen_setup, self.btn_calibrate]:
             b.config(state="normal" if ready else "disabled")
         self.btn_plot.config(state="normal" if idle and blocker is None else "disabled")
         self.btn_pause.config(state="normal" if self.plotting else "disabled",
@@ -286,6 +295,39 @@ class Dashboard:
     def on_jog(self, dx, dy):
         step = self.jog_step.get()
         self._try(self.backend.jog, dx * step, dy * step)
+
+    def on_jog_press(self, dx, dy):
+        # bindings fire even on a greyed-out button, so check here
+        if not self.check.connected or self.plotting or self.jogging:
+            return
+        self._jog_held = True
+        self._jog_click = (dx, dy)
+        self._jog_timer = self.root.after(
+            300, lambda: self._start_hold_jog(dx, dy))
+
+    def on_jog_release(self):
+        self._jog_held = False         # a running hold-jog stops on this
+        if self._jog_timer is not None:
+            # let go before the hold started: a normal one-step click
+            self.root.after_cancel(self._jog_timer)
+            self._jog_timer = None
+            dx, dy = self._jog_click
+            self.on_jog(dx, dy)
+
+    def _start_hold_jog(self, dx, dy):
+        self._jog_timer = None
+        if not self._jog_held:
+            return
+        self.jogging = True
+        self.refresh()
+
+        def work():
+            try:
+                self.backend.jog_hold(dx, dy, lambda: self._jog_held)
+                self.events.put(("jog_done",))
+            except PlotterError as e:
+                self.events.put(("jog_error", e))
+        threading.Thread(target=work, daemon=True).start()
 
     def on_set_origin(self):
         if messagebox.askokcancel(
@@ -441,6 +483,14 @@ class Dashboard:
                     self.progress.config(value=ev[1])
                     if self._job:
                         self._job["done"] = ev[1]
+                    continue
+                if ev[0] in ("jog_done", "jog_error"):
+                    self.jogging = False
+                    self._sync_from_backend()
+                    self.refresh()
+                    if ev[0] == "jog_error":
+                        messagebox.showerror("Plotter", str(ev[1]),
+                                             parent=self.root)
                     continue
                 self.plotting = False
                 self.paused = False

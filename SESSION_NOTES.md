@@ -177,6 +177,10 @@ if slower.
 Plot timer (2026-10-05): status shows 'Stroke i of n - elapsed m:ss - about
 m:ss left' (left corrected by actual speed so far; pauses excluded), and
 'Finished in m:ss (estimated m:ss)' at the end.
+Hold-to-jog (2026-10-05): click an arrow = one 1/10 mm step; hold >0.3 s =
+continuous move (3 mm moves at F900 ~15 mm/s, next sent when head is half a
+step from the end, via '?' MPos). Stops within ~5 mm of release; capped at
+100 mm per hold (no limit switches). NOT YET TRIED ON HARDWARE.
 Classroom workflow: Candle off -> dashboard.py -> Connect -> sheet centred ->
 jog to centre -> Set origin -> Open student file -> Plot; swap sheets between
 students without moving the head (plots end at the centre).

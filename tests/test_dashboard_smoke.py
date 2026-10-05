@@ -5,6 +5,7 @@ few buttons.  No plotter, but needs a display (fine on the teacher laptop).
     python tests/test_dashboard_smoke.py
 """
 
+import gc
 import os
 import sys
 import time
@@ -33,6 +34,16 @@ def make(fake, save=False):
     return root, d
 
 
+def close(root):
+    """Destroy the window and free its Tk variables now, on this thread.
+
+    Left to the garbage collector, they can be freed later from a jog or
+    plot thread, which Tk refuses ("main thread is not in main loop").
+    """
+    root.destroy()
+    gc.collect()
+
+
 def pump(root, until, seconds=10):
     end = time.time() + seconds
     while time.time() < end and not until():
@@ -48,7 +59,7 @@ class TestDashboard(unittest.TestCase):
             self.assertEqual(str(d.btn_plot["state"]), "disabled")
             self.assertIn("Connect", d.status["text"])
         finally:
-            root.destroy()
+            close(root)
 
     def test_connect_origin_open_and_plot(self):
         fake = FakeGrbl()
@@ -68,7 +79,7 @@ class TestDashboard(unittest.TestCase):
             self.assertIn("Finished in", d.status["text"])
             self.assertIn("estimated", d.status["text"])
         finally:
-            root.destroy()
+            close(root)
 
     def test_too_big_drawing_blocks_plot_until_fit(self):
         root, d = make(FakeGrbl())
@@ -84,7 +95,7 @@ class TestDashboard(unittest.TestCase):
             d.on_fit()
             self.assertEqual(str(d.btn_plot["state"]), "normal")
         finally:
-            root.destroy()
+            close(root)
 
 
 class TestReviewFixes(unittest.TestCase):
@@ -101,7 +112,7 @@ class TestReviewFixes(unittest.TestCase):
             self.assertIn("$X", fake.sent)
             self.assertFalse(d.backend._stopping)
         finally:
-            root.destroy()
+            close(root)
 
     def test_poll_survives_a_failing_callback(self):
         fake = FakeGrbl()
@@ -118,7 +129,7 @@ class TestReviewFixes(unittest.TestCase):
             pump(root, lambda: not d.plotting)
             self.assertFalse(d.plotting)       # second job was noticed
         finally:
-            root.destroy()
+            close(root)
 
 
 class TestTimerDisplay(unittest.TestCase):
@@ -138,7 +149,41 @@ class TestTimerDisplay(unittest.TestCase):
             self.assertTrue(any("elapsed" in t and "left" in t for t in seen),
                             seen[:5])
         finally:
-            root.destroy()
+            close(root)
+
+
+class TestHoldToJog(unittest.TestCase):
+
+    def test_quick_click_is_one_step(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            fake.sent.clear()
+            d.on_jog_press(1, 0)
+            d.on_jog_release()
+            pump(root, lambda: not d.jogging)
+            self.assertIn("G1 X10.000 Y0.000 F1500", fake.sent)
+        finally:
+            close(root)
+
+    def test_holding_moves_continuously_until_release(self):
+        fake = FakeGrbl(read_delay=0.02)   # replies take time, like a real port
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            fake.sent.clear()
+            d.on_jog_press(0, 1)
+            pump(root, lambda: False, seconds=0.8)      # hold
+            self.assertTrue(d.jogging)
+            d.on_jog_release()
+            pump(root, lambda: not d.jogging)
+            moves = [l for l in fake.sent if l.startswith("G1")]
+            self.assertGreaterEqual(len(moves), 2)
+            self.assertLess(len(moves), 33)       # stopped by release, not cap
+            self.assertTrue(all(l == "G1 X0.000 Y3.000 F900" for l in moves))
+        finally:
+            close(root)
 
 
 class TestTextBox(unittest.TestCase):
@@ -159,7 +204,7 @@ class TestTextBox(unittest.TestCase):
             pump(root, lambda: not d.plotting)
             self.assertFalse(d.plotting)
         finally:
-            root.destroy()
+            close(root)
 
     def test_unknown_characters_are_explained(self):
         root, d = make(FakeGrbl())
@@ -173,7 +218,7 @@ class TestTextBox(unittest.TestCase):
             self.assertIn("1, 2", shown[0][1])
         finally:
             dashboard.messagebox.showerror = saved
-            root.destroy()
+            close(root)
 
 
 class TestWizards(unittest.TestCase):
@@ -192,7 +237,7 @@ class TestWizards(unittest.TestCase):
             self.assertIn("M3 S60", fake.sent)
             w.destroy()
         finally:
-            root.destroy()
+            close(root)
 
     def test_pen_setup_test_needs_an_origin(self):
         root, d = make(FakeGrbl())
@@ -204,7 +249,7 @@ class TestWizards(unittest.TestCase):
             self.assertIn("Set origin here", w.text["text"])
             w.destroy()
         finally:
-            root.destroy()
+            close(root)
 
     def test_pen_setup_solid_lines_ticks_the_checklist(self):
         root, d = make(FakeGrbl())
@@ -217,7 +262,7 @@ class TestWizards(unittest.TestCase):
             self.assertTrue(d.check.pen_setup_done)
             w.destroy()
         finally:
-            root.destroy()
+            close(root)
 
     def test_calibration_applies_the_average_to_both_axes(self):
         fake = FakeGrbl(replies={"$$": ["$100=80.000 (x, step/mm)",
@@ -241,7 +286,7 @@ class TestWizards(unittest.TestCase):
             self.assertFalse(d.backend.origin_set)
             w.destroy()
         finally:
-            root.destroy()
+            close(root)
 
 
 if __name__ == "__main__":

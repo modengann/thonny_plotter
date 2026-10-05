@@ -11,6 +11,8 @@ Facts this relies on (measured 2026-10-04, see docs/HARDWARE_NOTES.md):
   * pen up = M5 (also the state after any reset), pen down = M3 S<n>
 """
 
+import math
+import re
 import time
 
 from plotter import PlotterError
@@ -232,6 +234,43 @@ class GrblBackend:
         self._cmd("G91")
         try:
             self._cmd("G1 X%.3f Y%.3f F%d" % (dx, dy, feed))
+        finally:
+            self._cmd("G90")
+        self.wait()
+
+    def position(self):
+        """(x, y) machine position in mm, from GRBL's "?" status report."""
+        self._write(b"?")
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            line = self._readline()
+            m = re.search(r"MPos:(-?[\d.]+),(-?[\d.]+)", line)
+            if m:
+                return float(m.group(1)), float(m.group(2))
+        raise PlotterError("The plotter didn't report its position.")
+
+    def jog_hold(self, dx, dy, keep_going, step=3.0, feed=900, max_mm=100.0):
+        """Move in direction (dx, dy) for as long as keep_going() is True.
+
+        GRBL 0.9 has no jog command, so this queues short relative moves,
+        sending the next one when the head is half a step from the end of
+        the last.  At most about 1.5 steps are ever queued, so the head
+        stops within ~5 mm of letting go.  No limit switches on the AX4:
+        each hold is capped at max_mm.
+        """
+        self.pen(False)
+        self._cmd("G91")
+        try:
+            start = self.position()
+            sent = 0.0
+            while keep_going() and sent + step <= max_mm + 1e-9:
+                self._cmd("G1 X%.3f Y%.3f F%d" % (dx * step, dy * step, feed))
+                sent += step
+                while keep_going():
+                    x, y = self.position()
+                    if sent - math.hypot(x - start[0], y - start[1]) <= step / 2:
+                        break
+                    time.sleep(0.02)
         finally:
             self._cmd("G90")
         self.wait()
