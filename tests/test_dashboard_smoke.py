@@ -85,5 +85,73 @@ class TestDashboard(unittest.TestCase):
             root.destroy()
 
 
+class TestWizards(unittest.TestCase):
+
+    def test_pen_setup_lifts_then_goes_to_touch_position(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            fake.sent.clear()
+            import dashboard_wizards
+            w = dashboard_wizards.PenSetupWizard(d)
+            self.assertIn("M5", fake.sent)
+            w.s2()
+            w.s3()
+            self.assertIn("M3 S60", fake.sent)
+            w.destroy()
+        finally:
+            root.destroy()
+
+    def test_pen_setup_test_needs_an_origin(self):
+        root, d = make(FakeGrbl())
+        try:
+            d.on_connect()
+            import dashboard_wizards
+            w = dashboard_wizards.PenSetupWizard(d)
+            w.s4()
+            self.assertIn("Set origin here", w.text["text"])
+            w.destroy()
+        finally:
+            root.destroy()
+
+    def test_pen_setup_solid_lines_ticks_the_checklist(self):
+        root, d = make(FakeGrbl())
+        try:
+            d.on_connect()
+            d.check.pen_setup_done = None
+            import dashboard_wizards
+            w = dashboard_wizards.PenSetupWizard(d)
+            w.done()
+            self.assertTrue(d.check.pen_setup_done)
+            w.destroy()
+        finally:
+            root.destroy()
+
+    def test_calibration_applies_the_average_to_both_axes(self):
+        fake = FakeGrbl(replies={"$$": ["$100=80.000 (x, step/mm)",
+                                        "$101=80.000 (y, step/mm)", "ok"]})
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            d.backend.set_origin()
+            d.check.origin_set = True
+            d.check.pen_setup_done = "x"
+            import dashboard_wizards
+            w = dashboard_wizards.CalibrationWizard(d)
+            w.s2()
+            w.vx.set("149")
+            w.vy.set("149")
+            w.calc()
+            fake.sent.clear()
+            w.apply()
+            self.assertEqual(fake.sent, ["$100=80.537", "$101=80.537"])
+            self.assertTrue(d.check.calibrated)
+            self.assertFalse(d.backend.origin_set)
+            w.destroy()
+        finally:
+            root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
