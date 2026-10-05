@@ -110,19 +110,41 @@ def size_mm(strokes_mm):
     return (max(xs) - min(xs), max(ys) - min(ys))
 
 
-def estimate_seconds(strokes_mm, draw_feed, travel_feed, pen_s=0.3,
+def stroke_estimates(strokes_mm, draw_feed, travel_feed, pen_s=0.3,
                      per_seg=0.05):
-    t = 0.0
+    """Seconds for each stroke: travel to it, draw it, lift.  The trip back
+    to the origin at the end is added to the last one."""
+    out = []
     pos = (0.0, 0.0)
     for s in strokes_mm:
-        t += math.dist(pos, s[0]) / (travel_feed / 60.0)
+        t = math.dist(pos, s[0]) / (travel_feed / 60.0)
         for a, b in zip(s, s[1:]):
             t += math.dist(a, b) / (draw_feed / 60.0) + per_seg
-        t += 2 * pen_s
+        out.append(t + 2 * pen_s)
         pos = s[-1]
-    if strokes_mm:
-        t += math.dist(pos, (0.0, 0.0)) / (travel_feed / 60.0)
-    return t
+    if out:
+        out[-1] += math.dist(pos, (0.0, 0.0)) / (travel_feed / 60.0)
+    return out
+
+
+def estimate_seconds(strokes_mm, draw_feed, travel_feed, pen_s=0.3,
+                     per_seg=0.05):
+    return sum(stroke_estimates(strokes_mm, draw_feed, travel_feed, pen_s,
+                                per_seg))
+
+
+def remaining_seconds(per_stroke, done, elapsed_active):
+    """Time left, corrected by how fast the finished strokes really went."""
+    left = sum(per_stroke[done:])
+    spent_estimate = sum(per_stroke[:done])
+    if done and spent_estimate > 0 and elapsed_active > 0:
+        left *= elapsed_active / spent_estimate
+    return left
+
+
+def format_clock(seconds):
+    s = int(round(seconds))
+    return "%d:%02d" % (s // 60, s % 60)
 
 
 def format_time(seconds):

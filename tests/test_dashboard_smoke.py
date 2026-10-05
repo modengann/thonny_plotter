@@ -65,6 +65,8 @@ class TestDashboard(unittest.TestCase):
             pump(root, lambda: not d.plotting)
             self.assertFalse(d.plotting)
             self.assertIn("G1 X25.000 Y0.000 F1500", fake.sent)
+            self.assertIn("Finished in", d.status["text"])
+            self.assertIn("estimated", d.status["text"])
         finally:
             root.destroy()
 
@@ -115,6 +117,26 @@ class TestReviewFixes(unittest.TestCase):
             d.start_job([[(0, 0), (5, 0)]], "again")
             pump(root, lambda: not d.plotting)
             self.assertFalse(d.plotting)       # second job was noticed
+        finally:
+            root.destroy()
+
+
+class TestTimerDisplay(unittest.TestCase):
+
+    def test_status_shows_elapsed_and_remaining_while_plotting(self):
+        root, d = make(FakeGrbl(read_delay=0.01))
+        try:
+            d.check.pen_setup_done = "x"
+            d.on_connect()
+            d.backend.set_origin()
+            d.check.origin_set = True
+            d.load_file(os.path.join(SAMPLES, "square.py"))
+            d.on_plot()
+            seen = []
+            pump(root, lambda: (seen.append(d.status["text"]) and False)
+                 or not d.plotting)
+            self.assertTrue(any("elapsed" in t and "left" in t for t in seen),
+                            seen[:5])
         finally:
             root.destroy()
 

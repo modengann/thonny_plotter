@@ -11,6 +11,7 @@ import datetime
 import os
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -40,6 +41,7 @@ class Dashboard:
         self.paused = False
         self._on_done = None
         self._worker = None          # the plot thread, while one runs
+        self._job = None             # timing of the plot in progress
         self.events = queue.Queue()
         self._build()
         self.refresh()
@@ -395,6 +397,11 @@ class Dashboard:
         self.plotting = True
         self.paused = False
         self._on_done = on_done
+        self._job = {"parts": logic.stroke_estimates(
+                         strokes_mm, self.config["draw_feed"],
+                         self.config["travel_feed"], self.config["servo_wait_s"]),
+                     "n": len(strokes_mm), "done": 0, "t0": time.time(),
+                     "paused_total": 0.0, "paused_at": None}
         self.progress.config(maximum=max(1, len(strokes_mm)), value=0)
         self.status.config(text=label + "...")
 
@@ -421,6 +428,8 @@ class Dashboard:
     def _poll(self):
         try:
             self._handle_events()
+            if self.plotting:
+                self._show_timer()
         finally:                 # keep polling even if a callback fails
             self.root.after(100, self._poll)
 
@@ -430,7 +439,8 @@ class Dashboard:
                 ev = self.events.get_nowait()
                 if ev[0] == "progress":
                     self.progress.config(value=ev[1])
-                    self.status.config(text="Stroke %d of %d" % (ev[1], ev[2]))
+                    if self._job:
+                        self._job["done"] = ev[1]
                     continue
                 self.plotting = False
                 self.paused = False
@@ -438,7 +448,7 @@ class Dashboard:
                 callback, self._on_done = self._on_done, None
                 self.refresh()
                 if ev[0] == "done":
-                    self.status.config(text="Finished.")
+                    self.status.config(text=self._finished_text())
                     if callback:
                         callback()
                 elif ev[0] == "stopped":
@@ -450,6 +460,38 @@ class Dashboard:
         except queue.Empty:
             pass
 
+    def _active_seconds(self, now):
+        """Time spent plotting, not counting pauses."""
+        j = self._job
+        paused = j["paused_total"]
+        if j["paused_at"] is not None:
+            paused += now - j["paused_at"]
+        return now - j["t0"] - paused
+
+    def _show_timer(self):
+        j = self._job
+        if j is None:
+            return
+        now = time.time()
+        elapsed = logic.format_clock(now - j["t0"])
+        stroke = "Stroke %d of %d" % (min(j["done"] + 1, j["n"]), j["n"])
+        if self.paused:
+            text = "Paused - %s - elapsed %s" % (stroke, elapsed)
+        else:
+            left = logic.remaining_seconds(j["parts"], j["done"],
+                                           self._active_seconds(now))
+            text = "%s - elapsed %s - about %s left" % (
+                stroke, elapsed, logic.format_clock(left))
+        self.status.config(text=text)
+
+    def _finished_text(self):
+        j = self._job
+        if j is None:
+            return "Finished."
+        return "Finished in %s (estimated %s)" % (
+            logic.format_clock(time.time() - j["t0"]),
+            logic.format_clock(sum(j["parts"])))
+
     def on_pause(self):
         if not self.plotting:
             return
@@ -459,6 +501,13 @@ class Dashboard:
             else:
                 self.backend.pause()
             self.paused = not self.paused
+            if self._job:
+                now = time.time()
+                if self.paused:
+                    self._job["paused_at"] = now
+                elif self._job["paused_at"] is not None:
+                    self._job["paused_total"] += now - self._job["paused_at"]
+                    self._job["paused_at"] = None
         except PlotterError as e:
             messagebox.showerror("Plotter", str(e), parent=self.root)
         self.refresh()

@@ -76,6 +76,33 @@ class TestTime(unittest.TestCase):
         self.assertEqual(logic.format_time(65), "1 min 05 s")
 
 
+class TestTimer(unittest.TestCase):
+
+    STROKES = [[(0, 0), (25, 0)], [(25, 10), (25, 35)]]
+
+    def test_per_stroke_estimates_add_up_to_the_total(self):
+        parts = logic.stroke_estimates(self.STROKES, 1500, 3000)
+        self.assertEqual(len(parts), 2)
+        self.assertAlmostEqual(sum(parts),
+                               logic.estimate_seconds(self.STROKES, 1500, 3000))
+
+    def test_remaining_before_anything_is_drawn_is_the_estimate(self):
+        parts = [2.0, 3.0]
+        self.assertAlmostEqual(logic.remaining_seconds(parts, 0, 0.0), 5.0)
+
+    def test_remaining_is_corrected_by_actual_speed(self):
+        # first stroke estimated 2 s but took 3 s: the rest is 50% slower
+        self.assertAlmostEqual(logic.remaining_seconds([2.0, 3.0], 1, 3.0), 4.5)
+
+    def test_nothing_remaining_when_done(self):
+        self.assertEqual(logic.remaining_seconds([2.0, 3.0], 2, 6.0), 0)
+
+    def test_clock_format(self):
+        self.assertEqual(logic.format_clock(0), "0:00")
+        self.assertEqual(logic.format_clock(65.4), "1:05")
+        self.assertEqual(logic.format_clock(3725), "62:05")
+
+
 class TestChecklist(unittest.TestCase):
 
     def test_fresh_session_needs_connect_and_origin(self):

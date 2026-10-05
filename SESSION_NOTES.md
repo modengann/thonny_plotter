@@ -170,6 +170,13 @@ Dashboard text box (2026-10-05): type text, 'Use text' -> plots in the
 write_name.py stroke font, centred on the origin, Scale/Fit apply. Letters
 only (A-Z, a-z, space, 7 Hangeul blocks); digits/punctuation NOT added (teacher
 said text only for now).
+PARKED (teacher, 2026-10-05): colour pen changes. Design discussed: auto pen
+up + head to front + popup with colour swatch, 'Lower to set height' button.
+Teacher's choice if built: change colours IN CODE ORDER (not grouped), even
+if slower.
+Plot timer (2026-10-05): status shows 'Stroke i of n - elapsed m:ss - about
+m:ss left' (left corrected by actual speed so far; pauses excluded), and
+'Finished in m:ss (estimated m:ss)' at the end.
 Classroom workflow: Candle off -> dashboard.py -> Connect -> sheet centred ->
 jog to centre -> Set origin -> Open student file -> Plot; swap sheets between
 students without moving the head (plots end at the centre).
