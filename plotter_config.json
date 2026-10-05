@@ -1,9 +1,17 @@
 {
-  "_comment": "Written by the calibration tool. Students never edit this.",
-  "_status": "AIR TEST ONLY - no pen fitted, heights are deliberately high",
+  "_comment": "Written by the calibration tools. Students never edit this.",
+  "_status": "backend grbl = IKRANBIRD AX4. The Z values are MINI air-test values, unused by the AX4.",
+  "backend": "grbl",
+  "calibrated": null,
   "draw_feed": 1500,
+  "margin_mm": 10,
+  "paper": "letter",
+  "pen_down_s": 80,
   "pen_down_z": 10.0,
   "pen_offset": [0.0, 0.0],
+  "pen_setup_done": "2026-10-04",
+  "pen_touch_s": 60,
   "pen_up_z": 15.0,
+  "servo_wait_s": 0.3,
   "travel_feed": 3000
 }

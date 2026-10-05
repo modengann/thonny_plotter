@@ -258,6 +258,8 @@ class Plotter(turtle.Turtle):
         self._hw_down = False
         self._homed = False
         self.firmware = None
+        self.grbl = None             # GrblBackend when driving the AX4
+        self.backend_name = self.config.get("backend", "mini")
 
         if show_paper:
             self._draw_paper_outline()
@@ -337,7 +339,15 @@ class Plotter(turtle.Turtle):
             self._current = None
 
         # hardware first, then screen, so the pen never runs ahead of code
-        if self.ser is not None:
+        grbl = getattr(self, "grbl", None)
+        if grbl is not None:
+            # AX4: paper coordinates, origin at the paper centre, no clamp
+            grbl.pen(down)
+            grbl.move(end[0] * self.scale, end[1] * self.scale,
+                      self.draw_feed if down else self.travel_feed)
+            if self.lockstep:
+                grbl.wait()
+        elif self.ser is not None:
             self._hw_pen(down)
             nx, ny = self._nozzle(mx, my)
             feed = self.draw_feed if down else self.travel_feed
@@ -350,12 +360,16 @@ class Plotter(turtle.Turtle):
     def penup(self):
         super().penup()
         self._current = None
-        if self.ser is not None:
+        if getattr(self, "grbl", None) is not None:
+            self.grbl.pen(False)
+        elif self.ser is not None:
             self._hw_pen(False)
 
     def pendown(self):
         super().pendown()
-        if self.ser is not None:
+        if getattr(self, "grbl", None) is not None:
+            self.grbl.pen(True)
+        elif self.ser is not None:
             self._hw_pen(True)
 
     # turtle defines these aliases at class-creation time, so re-bind them
@@ -370,6 +384,14 @@ class Plotter(turtle.Turtle):
         Homing and the first travel move live in prepare(), so that simply
         connecting can never drive the pen into the bed.
         """
+        if getattr(self, "backend_name", "mini") == "grbl":
+            from grbl_backend import GrblBackend
+            print("Connecting to the AX4 plotter ...")
+            self.grbl = GrblBackend(self.config)
+            self.firmware = self.grbl.connect(port)
+            print("Connected.  Nothing has moved yet.")
+            return self.firmware
+
         if serial is None:
             raise PlotterError(
                 "pyserial is not installed, so I can't talk to the printer.\n"
@@ -418,6 +440,14 @@ class Plotter(turtle.Turtle):
         Z-homing can push a fitted pen into the bed, so this is deliberately
         separate from connect() and must be called on purpose.
         """
+        if getattr(self, "grbl", None) is not None:
+            # The AX4 has no homing: wherever the pen is now is the centre.
+            self.grbl.pen(False)
+            self.grbl.set_origin()
+            print("Ready.  The pen's current position is the centre of "
+                  "the paper.")
+            return
+
         if self.ser is None:
             raise PlotterError("Not connected.  Call connect() first.")
         print("Homing (this takes a moment)...")
@@ -498,6 +528,14 @@ class Plotter(turtle.Turtle):
 
     def finish(self):
         """Lift the pen, park the head, release motors, close the port."""
+        if getattr(self, "grbl", None) is not None:
+            try:
+                self.grbl.finish(self.travel_feed)
+            finally:
+                self.grbl = None
+            print("Done.  Pen up, head back at the centre.")
+            return
+
         if self.ser is None:
             return
         try:
