@@ -345,3 +345,25 @@ Read-only check with `grbl_connect_test.py COM12`. Nothing moved.
 - "bruce moden" plotted: 17 strokes, 38.8 s, no errors.
 - "bruce loves hockey" plotted: 23 strokes, 54.9 s, no errors (172 mm wide).
 - draw_turtle.py: turtle animal, 86 x 70 mm centred on the head position, 15 strokes, 57.0 s, no errors. First drawing using negative coordinates (origin at paper centre) - fine, no soft limits.
+
+## AX4 dashboard acceptance (Task 7), 2026-10-05
+- Stage 1 connect: dashboard.py connected first try; checklist showed
+  Connected + Pen set up ticked, Origin + Distances unticked (correct).
+  Nothing moved.
+- Jog arrows move the head the way they are labelled (Up = away).
+  Set origin here worked.
+- Stage 2 pen setup wizard ("skip to test"): three clean zigzags, no joining
+  lines. Pen up M5 / down M3 S80 confirmed through the dashboard.
+- Stage 3 plot square.py (25 mm square): plotted. Afterwards Plot was
+  disabled with "Set the origin" (origin flag cleared) while still
+  connected. NOT reproduced against the fake plotter (same click sequence
+  keeps the origin). Only real-hardware causes left: a GRBL ALARM reply
+  (should show an error box) or STOP. Teacher re-set the origin and
+  re-plotted fine. UNEXPLAINED - watch for it; if it recurs, note any
+  error box text.
+- Stage 4 STOP mid-plot (square.py at 380%): head stopped at once, pen
+  lifted, "Plot stopped" box, Origin unticked, Connected stayed ticked,
+  Set origin worked afterwards. So `!` + Ctrl-X + recover ($X) works on
+  GRBL 0.9i (spec open item 1: recovery path confirmed; exact GRBL state
+  line after Ctrl-X not captured, not needed).
+- Stage 5 calibration: DEFERRED by teacher (will do later).

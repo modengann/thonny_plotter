@@ -159,10 +159,16 @@ tests/fake_grbl.py, tests/samples/. plotter_config.json now backend=grbl.
 Final whole-branch review DONE (fresh reviewer): 0 critical, 4 important
 (all fixed with failing-test-first, commit 8a98488), 8 minors deferred (listed
 in the ledger). 128 offline tests pass.
-**NEXT: Task 7 steps 2-8 = hardware acceptance, teacher at the plotter, explicit
-"go" per stage:** connect / pen setup wizard / origin + square plot / STOP
-mid-plot (record GRBL state after Ctrl-X) / calibration wizard. Then record
-results in HARDWARE_NOTES.md and merge decision (finishing-a-development-branch).
+**HARDWARE ACCEPTANCE 2026-10-05:** stages 1-4 PASSED (connect, pen-setup
+zigzag test, square plot, STOP mid-plot). Dashboard is in classroom use.
+**STILL TO DO:** (1) stage 5 distance calibration (teacher will do later; yellow
+banner reminds); (2) watch for the origin clearing itself after a plot - happened
+once on hardware, not reproducible offline, see HARDWARE_NOTES; (3) merge branch
+`ax4-dashboard` into master when the teacher says so; (4) deferred minors in the
+ledger.
+Classroom workflow: Candle off -> dashboard.py -> Connect -> sheet centred ->
+jog to centre -> Set origin -> Open student file -> Plot; swap sheets between
+students without moving the head (plots end at the centre).
 Progress ledger (git-ignored): .superpowers/sdd/2026-10-04-ax4-dashboard/progress.md
 Plan deviation: Prusa code stays inside Plotter (no MiniBackend class) so the
 45 original tests are untouched.
