@@ -224,3 +224,38 @@ python motion_test.py            # prints a movement plan, sends nothing
 
 `motion_test.py --yes` then runs a full home-and-corners test. **Remove the
 pen before that one.**
+
+## AX4 dashboard (teacher)
+
+Start: open `dashboard.py` in Thonny and press Run (or double-click it).
+If Candle is open, click Disconnect in Candle first - only one program can
+use the plotter at a time.
+
+Every session:
+1. Click **Connect**.
+2. Put a Letter sheet on the bed, landscape, **centred on the bed** (the
+   plotter only travels 210 mm front to back; the sheet is 216 mm).
+3. Use the arrow buttons to move the pen over the centre of the sheet.
+   Click **Set origin here**.
+4. **Open student file...**, check the preview and messages, adjust
+   **Scale %** or click **Fit to paper**, then **Plot**.
+5. **STOP** lifts the pen and stops at once. Set the origin again after it.
+
+Once, and whenever the pen changes: **Pen setup...** (four guided steps).
+
+Once, and if drawings measure wrong: **Calibrate distances...** (draws an
+L, you measure it with a ruler). The yellow NOT CALIBRATED bar stays until
+this is done.
+
+Students: write normal turtle programs (`import turtle`) and email the .py
+file. They do not need plotter.py. `input()`, colours, fills and text are
+not plotted; the dashboard says so.
+
+Manual check after changing dashboard code:
+- [ ] Opens with Plot disabled and the checklist unticked except Pen set up.
+- [ ] Open tests/samples/square.py: preview shows a square, info shows
+      25 x 25 mm at 100%.
+- [ ] Scale 1000: drawing turns red, Plot disabled. Fit to paper: black.
+- [ ] Open tests/samples/typo.py: ERROR line names line 5; partial drawing
+      greyed.
+- [ ] Open tests/samples/forever.py: after 20 s, "took too long".
