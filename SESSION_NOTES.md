@@ -193,6 +193,9 @@ Enabled only once the origin is set; pen up, travel_feed. Runs in a worker
 thread (_run_move, shared with hold-jog) registered as self._worker, so STOP
 works mid-move and the thread recovers. Side effect: hold-jog now also
 recovers properly after STOP. NOT YET TRIED ON HARDWARE. Uncommitted.
+Size tooltip (2026-10-08): hovering the Scale % box shows 'Estimated size:
+W x H mm at N%' once a file/text is loaded (Tooltip class + size_tip() in
+dashboard.py).
 Tk "application has been destroyed" noise in test_dashboard_smoke is
 pre-existing (also on HEAD); tests still pass.
 Classroom workflow: Candle off -> dashboard.py -> Connect -> sheet centred ->

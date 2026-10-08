@@ -23,6 +23,35 @@ PX_PER_MM = 2.0
 JOG_STEPS = (1, 10)
 
 
+class Tooltip:
+    """Show text(), worked out on hover, beside a widget.  Nothing when it
+    returns None."""
+
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        widget.bind("<Enter>", self.show, add="+")
+        widget.bind("<Leave>", self.hide, add="+")
+
+    def show(self, event=None):
+        text = self.text()
+        if not text or self.tip:
+            return
+        x = self.widget.winfo_rootx() + 10
+        y = self.widget.winfo_rooty() - 30
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.wm_overrideredirect(True)
+        self.tip.wm_geometry("+%d+%d" % (x, y))
+        tk.Label(self.tip, text=text, bg="#ffffe0", relief="solid",
+                 borderwidth=1, padx=4, pady=2).pack()
+
+    def hide(self, event=None):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+
+
 class Dashboard:
 
     def __init__(self, root, backend=None):
@@ -160,6 +189,7 @@ class Dashboard:
         sb.pack(side="left")
         sb.bind("<Return>", lambda e: self.refresh())
         sb.bind("<FocusOut>", lambda e: self.refresh())
+        Tooltip(sb, self.size_tip)
         ttk.Button(bottom, text="Fit to paper",
                    command=self.on_fit).pack(side="left", padx=2)
         ttk.Button(bottom, text="Reset 100%",
@@ -187,6 +217,14 @@ class Dashboard:
 
     def strokes_mm(self):
         return logic.to_mm(self.strokes, self._scale())
+
+    def size_tip(self):
+        """Hover text for the Scale box: the drawing's size at this scale."""
+        mm = self.strokes_mm()
+        if not mm:
+            return None
+        w, h = logic.size_mm(mm)
+        return "Estimated size: %.0f x %.0f mm at %d%%" % (w, h, self._scale())
 
     def _sync_from_backend(self):
         self.check.connected = self.backend.connected

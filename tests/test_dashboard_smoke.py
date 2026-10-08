@@ -98,6 +98,21 @@ class TestDashboard(unittest.TestCase):
             close(root)
 
 
+class TestSizeTooltip(unittest.TestCase):
+
+    def test_scale_tooltip_shows_size_once_a_file_is_loaded(self):
+        root, d = make(FakeGrbl())
+        try:
+            self.assertIsNone(d.size_tip())
+            d.load_file(os.path.join(SAMPLES, "square.py"))
+            w, h = dashboard.logic.size_mm(d.strokes_mm())
+            self.assertIn("%.0f x %.0f mm" % (w, h), d.size_tip())
+            d.scale.set(50)
+            self.assertIn("%.0f x %.0f mm" % (w / 2, h / 2), d.size_tip())
+        finally:
+            close(root)
+
+
 class TestReviewFixes(unittest.TestCase):
 
     def test_stop_after_worker_finished_still_recovers(self):
