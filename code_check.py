@@ -17,13 +17,19 @@ ALLOWED_MODULES = ("turtle", "math", "random", "time", "colorsys")
 # Built-ins that reach files, other code, or anything by name.
 BANNED_NAMES = {"open", "exec", "eval", "compile", "__import__", "getattr",
                 "setattr", "delattr", "globals", "locals", "vars",
-                "breakpoint", "getcanvas"}
+                "breakpoint", "getcanvas", "write_docstringdict",
+                "config_dict"}
 
 # Attributes that lead out of turtle into Tk (and from there anywhere).
+# BANNED_NAMES are refused as attributes too (b.exec, d.open).
 BANNED_ATTRS = {"getcanvas", "cv", "tk", "TK", "sys", "os", "modules",
-                "inspect", "types", "system"}
+                "inspect", "types", "system", "send", "winfo_interps", "mro"}
+
+# Generator, frame, code and traceback internals reach the built-ins.
+BANNED_PREFIXES = ("f_", "gi_", "cr_", "ag_", "co_", "tb_")
 
 ALLOWED_DUNDERS = {"__name__"}
+ALLOWED_DUNDER_STRINGS = {"__main__"}
 
 
 def _import_problem(line, name):
@@ -63,8 +69,13 @@ def _problems(node):
     elif isinstance(node, ast.Attribute):
         if node.attr.startswith("_"):
             yield _underscore(line, node.attr)
-        elif node.attr in BANNED_ATTRS:
+        elif (node.attr in BANNED_ATTRS or node.attr in BANNED_NAMES
+              or node.attr.startswith(BANNED_PREFIXES)):
             yield _not_allowed(line, "." + node.attr)
+    elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+        if (node.value.startswith("__")
+                and node.value not in ALLOWED_DUNDER_STRINGS):
+            yield _underscore(line, repr(node.value))
 
 
 def check(source):

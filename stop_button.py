@@ -7,6 +7,16 @@ the dashboard's STOP button does.  Off when there is no stop_pin, no
 gpiozero, or no GPIO (e.g. on the laptop).
 """
 
+import sys
+
+
+def _not_working(pin, err):
+    """Say so (it shows in journalctl on the Pi): a teacher who set
+    stop_pin believes the button works."""
+    print("STOP button on GPIO %s is not working: %s" % (pin, err),
+          file=sys.stderr)
+    return None
+
 
 def attach(pin, on_press, button_class=None):
     """Call on_press (from gpiozero's own thread) when the button is
@@ -16,11 +26,11 @@ def attach(pin, on_press, button_class=None):
     if button_class is None:
         try:
             from gpiozero import Button as button_class
-        except ImportError:
-            return None
+        except ImportError as e:
+            return _not_working(pin, e)
     try:
         button = button_class(pin, pull_up=True, bounce_time=0.05)
-    except Exception:            # gpiozero: no GPIO on this machine
-        return None
+    except Exception as e:       # gpiozero: no GPIO on this machine
+        return _not_working(pin, e)
     button.when_pressed = on_press
     return button

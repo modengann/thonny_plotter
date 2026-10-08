@@ -81,6 +81,31 @@ class TestRejected(unittest.TestCase):
         self.assertRejected("from turtle import getcanvas\n", 1, "getcanvas")
         self.assertRejected("import turtle\nturtle.TK.Tk()\n", 2, "TK")
 
+    def test_frame_and_code_object_escapes(self):
+        src = ("g = (i for i in [1])\n"
+               "g.gi_frame.f_builtins['exec']('import os')\n")
+        self.assertRejected(src, 2, "f_builtins")
+        self.assertRejected("def f(): pass\nc = f.co_code\n", 2, "co_code")
+        self.assertRejected("x = int.mro()\n", 1, "mro")
+
+    def test_banned_builtins_as_attributes(self):
+        self.assertRejected("import turtle\nb = turtle.Screen()\nb.exec('x')\n",
+                            3, "exec")
+        self.assertRejected("d = {}\nd.open('x')\n", 2, "open")
+
+    def test_dunder_strings(self):
+        self.assertRejected("d = {}\nd['__builtins__']\n", 2, "__builtins__")
+
+    def test_tk_send_and_turtle_file_helpers(self):
+        self.assertRejected("import turtle\nturtle.ScrolledCanvas(None).send('x')\n",
+                            2, "send")
+        self.assertRejected("import turtle\nc = turtle.Screen()\nc.winfo_interps()\n",
+                            3, "winfo_interps")
+        self.assertRejected("from turtle import *\nwrite_docstringdict('x')\n",
+                            2, "write_docstringdict")
+        self.assertRejected("import turtle\nturtle.config_dict('x')\n",
+                            2, "config_dict")
+
     def test_syntax_error_has_a_line(self):
         src = "import turtle\nfor i in range(3)\n    turtle.forward(10)\n"
         self.assertRejected(src, 2, "can't read")

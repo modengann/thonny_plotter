@@ -740,9 +740,10 @@ class Dashboard:
 
 
 def kiosk(root):
-    """Fill the whole (virtual) screen - used on the Raspberry Pi."""
-    root.geometry("%dx%d+0+0" % (root.winfo_screenwidth(),
-                                 root.winfo_screenheight()))
+    """Fill the whole (virtual) screen - used on the Raspberry Pi.
+    Fullscreen, so no title bar pushes STOP off the bottom (and there is
+    no close button to reset the AX4 by accident)."""
+    root.attributes("-fullscreen", True)
 
 
 def main(argv=None):

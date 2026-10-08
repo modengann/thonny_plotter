@@ -69,12 +69,16 @@ def save_upload(folder, name, source, now=None):
     now = now or datetime.datetime.now()
     base = "%s_%s" % (clean_name(name), now.strftime("%Y%m%d-%H%M%S"))
     filename, n = base + ".py", 2
-    while os.path.exists(os.path.join(folder, filename)):
-        filename, n = "%s_%d.py" % (base, n), n + 1
-    with open(os.path.join(folder, filename), "w", encoding="utf-8",
-              newline="") as f:
-        f.write(source)
-    return filename
+    while True:
+        try:                         # "x": fails if it exists, even if
+            f = open(os.path.join(folder, filename), "x",    # another upload
+                     encoding="utf-8", newline="")         # just made it
+        except FileExistsError:
+            filename, n = "%s_%d.py" % (base, n), n + 1
+            continue
+        with f:
+            f.write(source)
+        return filename
 
 
 def recent(folder, n=SHOW):

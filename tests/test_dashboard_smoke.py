@@ -404,6 +404,17 @@ class TestPiHost(unittest.TestCase):
         finally:
             close(root)
 
+    def test_kiosk_is_true_fullscreen(self):
+        # Fullscreen, not a screen-sized window: the window manager's title
+        # bar would push the bottom row (Plot, STOP) off the screen.
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            dashboard.kiosk(root)
+            self.assertTrue(int(root.attributes("-fullscreen")))
+        finally:
+            close(root)
+
     def test_hardware_stop_button_presses_stop(self):
         root, d = make(FakeGrbl())
         try:

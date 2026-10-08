@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -53,6 +54,16 @@ class TestSave(TempFolder):
         b = us.save_upload(self.dir, "ana", "x = 2\n", now)
         self.assertEqual(a, "ana_20261008-093000.py")
         self.assertEqual(b, "ana_20261008-093000_2.py")
+        with open(os.path.join(self.dir, a), encoding="utf-8") as f:
+            self.assertEqual(f.read(), "x = 1\n")
+
+    def test_two_uploads_at_the_same_moment_do_not_overwrite(self):
+        # Both threads see the name as free before either has written it.
+        now = datetime.datetime(2026, 10, 8, 9, 30, 0)
+        with mock.patch.object(us.os.path, "exists", return_value=False):
+            a = us.save_upload(self.dir, "", "x = 1\n", now)
+            b = us.save_upload(self.dir, "", "x = 2\n", now)
+        self.assertNotEqual(a, b)
         with open(os.path.join(self.dir, a), encoding="utf-8") as f:
             self.assertEqual(f.read(), "x = 1\n")
 

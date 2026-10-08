@@ -23,7 +23,7 @@ echo "== Installing packages"
 apt-get update
 apt-get install -y xvfb openbox x11vnc novnc websockify x11-utils \
     x11-xserver-utils python3-tk python3-serial python3-flask \
-    python3-gpiozero rsync
+    python3-gpiozero rsync fonts-nanum xfonts-base
 
 echo "== Turning off OctoPrint (it would hold the plotter's USB port)"
 systemctl disable --now octoprint 2>/dev/null || true

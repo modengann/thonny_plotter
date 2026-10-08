@@ -53,6 +53,11 @@ class TestPiFiles(unittest.TestCase):
             self.assertIn("[Install]", text, name)
             self.assertIn("Restart=always", text, name)
 
+    def test_setup_installs_fonts_for_korean_names(self):
+        text = read("setup.sh").decode()
+        self.assertIn("fonts-nanum", text)
+        self.assertIn("xfonts-base", text)
+
     def test_setup_installs_every_service(self):
         text = read("setup.sh").decode()
         for name in SERVICES:

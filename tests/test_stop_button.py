@@ -4,6 +4,8 @@ Tests for stop_button.py with a pretend button - no GPIO needed.
     python tests/test_stop_button.py
 """
 
+import contextlib
+import io
 import os
 import sys
 import unittest
@@ -40,12 +42,24 @@ class TestAttach(unittest.TestCase):
         b.when_pressed()
         self.assertEqual(presses, [1])
 
-    def test_no_gpio_hardware_is_ignored(self):
-        self.assertIsNone(stop_button.attach(17, print, NoGpio))
+    def test_no_gpio_hardware_is_reported(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertIsNone(stop_button.attach(17, print, NoGpio))
+        self.assertIn("STOP button on GPIO 17 is not working", err.getvalue())
 
-    def test_gpiozero_missing_is_ignored(self):
-        with mock.patch.dict(sys.modules, {"gpiozero": None}):
+    def test_gpiozero_missing_is_reported(self):
+        err = io.StringIO()
+        with mock.patch.dict(sys.modules, {"gpiozero": None}), \
+                contextlib.redirect_stderr(err):
             self.assertIsNone(stop_button.attach(17, print))
+        self.assertIn("STOP button on GPIO 17 is not working", err.getvalue())
+
+    def test_no_pin_is_silent(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            stop_button.attach(None, print)
+        self.assertEqual(err.getvalue(), "")
 
 
 if __name__ == "__main__":
