@@ -1,0 +1,13 @@
+[Unit]
+Description=AX4 plotter dashboard on virtual screen :1
+After=network.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@APP@
+ExecStart=@APP@/pi/start-display.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,3 @@
+# Files run on the Raspberry Pi must keep LF endings.
+pi/* text eol=lf
+*.sh text eol=lf

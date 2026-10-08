@@ -1,0 +1,12 @@
+[Unit]
+Description=Show the plotter dashboard in a browser on port 6080
+After=plotter-vnc.service
+
+[Service]
+User=@USER@
+ExecStart=/usr/bin/websockify --web /usr/share/novnc 6080 localhost:5900
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

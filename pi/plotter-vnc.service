@@ -1,0 +1,12 @@
+[Unit]
+Description=Share screen :1 over VNC (local only; noVNC serves it)
+After=plotter-display.service
+
+[Service]
+User=@USER@
+ExecStart=/usr/bin/x11vnc -display :1 -shared -forever -nopw -localhost -rfbport 5900 -quiet
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

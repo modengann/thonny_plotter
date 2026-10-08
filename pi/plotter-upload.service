@@ -1,0 +1,13 @@
+[Unit]
+Description=AX4 plotter upload page on port 8000
+After=network.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@APP@
+ExecStart=/usr/bin/python3 @APP@/upload_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
