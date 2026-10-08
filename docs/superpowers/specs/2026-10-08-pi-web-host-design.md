@@ -141,7 +141,7 @@ button (pin, ground), and the gotcha below.
   works; it looks dated.
 - **OctoPrint** must be off or uninstalled, or it will hold the serial port.
 - **Line endings.** `pi/*.sh` and `pi/*.service` must be LF or bash and
-  systemd choke on the ``. A `.gitattributes` rule forces `eol=lf` for them.
+  systemd choke on Windows carriage returns. A `.gitattributes` rule forces `eol=lf` for them.
 
 ## Error handling
 
