@@ -6,7 +6,9 @@ Tests for dashboard_logic.py -- no window, no plotter.
 
 import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -237,6 +239,52 @@ class TestRunStudent(unittest.TestCase):
             logic.error_text({"type": "NameError", "line": 4,
                               "message": "name 'forwad' is not defined"}),
             "Line 4: NameError: name 'forwad' is not defined")
+
+
+class TestStudentCommand(unittest.TestCase):
+
+    def test_plain(self):
+        self.assertEqual(logic.student_command("s.py"),
+                         [sys.executable, logic.RUNNER, "s.py"])
+
+    def test_run_as_uses_sudo_without_a_password_prompt(self):
+        self.assertEqual(logic.student_command("s.py", "plotstudent"),
+                         ["sudo", "-n", "-u", "plotstudent",
+                          sys.executable, logic.RUNNER, "s.py"])
+
+    def test_defaults_have_the_pi_keys_switched_off(self):
+        self.assertIsNone(logic.AX4_DEFAULTS["run_as"])
+        self.assertIsNone(logic.AX4_DEFAULTS["stop_pin"])
+
+    def test_uploads_folder_is_in_the_project(self):
+        self.assertEqual(logic.UPLOADS,
+                         os.path.join(os.path.dirname(logic.RUNNER), "uploads"))
+
+
+class TestRunStudentChecks(unittest.TestCase):
+
+    def test_refused_program_is_never_run(self):
+        fd, path = tempfile.mkstemp(suffix=".py")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("import os\nos.system('echo hi')\n")
+        try:
+            with mock.patch.object(logic.subprocess, "run",
+                                   side_effect=AssertionError("ran it")):
+                r = logic.run_student(path)
+        finally:
+            os.remove(path)
+        self.assertEqual(r["strokes"], [])
+        self.assertEqual(r["error"]["type"], "NotAllowed")
+        text = logic.error_text(r["error"])
+        self.assertTrue(text.startswith("Line 1: "), text)
+        self.assertIn("os", text)
+
+    def test_run_as_failure_points_at_the_setup_doc(self):
+        r = logic.run_student(os.path.join(SAMPLES, "square.py"), timeout=10,
+                              run_as="no-such-user-ax4")
+        self.assertEqual(r["error"]["type"], "RunnerFailed")
+        self.assertIn("no-such-user-ax4", r["error"]["message"])
+        self.assertIn("PI_SETUP", r["error"]["message"])
 
 
 if __name__ == "__main__":

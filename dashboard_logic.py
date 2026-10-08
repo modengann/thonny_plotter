@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 
+import code_check
 from grbl_backend import LETTER_MM
 
 STEP_MM = 0.25               # 100% scale: one turtle step = 0.25 mm
@@ -20,15 +21,18 @@ STUDENT_TIMEOUT = 20         # seconds a student program may run
 CAL_MM = 150.0               # length of each calibration line
 RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                       "run_turtle.py")
+UPLOADS = os.path.join(os.path.dirname(RUNNER), "uploads")   # Pi upload page
 
 AX4_DEFAULTS = {
     "backend": "grbl", "paper": "letter", "margin_mm": 10,
     "pen_touch_s": 60, "pen_down_s": 80, "servo_wait_s": 0.3,
     "draw_feed": 1500, "travel_feed": 3000,
     "pen_setup_done": None, "calibrated": None,
+    "run_as": None, "stop_pin": None,        # Pi only: see docs/PI_SETUP.md
 }
 
-_PLAIN_ERRORS = ("Timeout", "KeyboardInputNotSupported", "RunnerFailed")
+_PLAIN_ERRORS = ("Timeout", "KeyboardInputNotSupported", "RunnerFailed",
+                 "NotAllowed")
 
 
 def ax4_config(raw):
@@ -45,23 +49,49 @@ def _failed(kind, message):
             "error": {"type": kind, "message": message, "line": None}}
 
 
-def run_student(path, timeout=STUDENT_TIMEOUT):
-    """Run a student's .py in a separate process and return what it drew."""
+def student_command(path, run_as=None):
+    """The command that runs a student file; as another user if run_as."""
+    cmd = [sys.executable, RUNNER, path]
+    if run_as:
+        cmd = ["sudo", "-n", "-u", run_as] + cmd
+    return cmd
+
+
+def _runner_failed(detail, run_as):
+    if run_as:
+        return ("Couldn't run the program as user %s - see docs/PI_SETUP.md.\n%s"
+                % (run_as, detail))
+    return detail
+
+
+def run_student(path, timeout=STUDENT_TIMEOUT, run_as=None):
+    """Check a student's .py, then run it in a separate process and return
+    what it drew."""
+    try:
+        with open(path, encoding="utf-8-sig", errors="replace") as f:
+            source = f.read()
+    except OSError as e:
+        return _failed("RunnerFailed", str(e))
+    problems = code_check.check(source)
+    if problems:
+        return _failed("NotAllowed", "\n".join(problems))
     flags = 0x08000000 if sys.platform == "win32" else 0   # no console window
     try:
-        out = subprocess.run([sys.executable, RUNNER, path],
+        out = subprocess.run(student_command(path, run_as),
                              capture_output=True, text=True, encoding="utf-8",
                              errors="replace", timeout=timeout,
                              creationflags=flags)
     except subprocess.TimeoutExpired:
         return _failed("Timeout", "The program took too long - is there a "
                                   "loop that never ends?")
+    except OSError as e:                     # e.g. no sudo on this machine
+        return _failed("RunnerFailed", _runner_failed(str(e), run_as))
     try:
         return json.loads(out.stdout)
     except ValueError:
         last = (out.stderr.strip().splitlines() or
                 ["The program could not be run."])[-1]
-        return _failed("RunnerFailed", last)
+        return _failed("RunnerFailed", _runner_failed(last, run_as))
 
 
 def error_text(err):
