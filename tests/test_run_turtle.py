@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +88,26 @@ class TestRunner(unittest.TestCase):
         r = run_sample("nothing.py")
         self.assertIsNone(r["error"])
         self.assertEqual(r["strokes"], [])
+
+
+@unittest.skipUnless(hasattr(__import__("signal"), "alarm"), "Linux/Mac only")
+class TestLimits(unittest.TestCase):
+
+    def test_a_runaway_program_ends_itself(self):
+        code = ("import sys, time; sys.path.insert(0, %r); import run_turtle; "
+                "run_turtle.LIMIT_SECONDS = 1; run_turtle.limit_resources(); "
+                "time.sleep(10)" % ROOT)
+        start = time.time()
+        out = subprocess.run([sys.executable, "-c", code], timeout=8)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertLess(time.time() - start, 5)
+
+
+class TestLimitsExist(unittest.TestCase):
+
+    def test_limits_are_safe_to_call_here(self):
+        self.assertEqual(run_turtle.LIMIT_SECONDS, 25)
+        self.assertTrue(callable(run_turtle.limit_resources))
 
 
 if __name__ == "__main__":

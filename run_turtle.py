@@ -32,6 +32,11 @@ W_WRITE = "Text from write() is not drawn."
 W_DOT = "dot() and stamp() are not drawn."
 W_COLOUR = "The plotter has one pen: all lines are drawn in the same colour."
 
+# On the Pi the program runs under sudo, and the dashboard's time limit
+# can only kill sudo - so the runner also limits itself (Linux/Mac only).
+LIMIT_SECONDS = 25                   # a bit longer than the dashboard waits
+LIMIT_MEMORY = 1024 * 1024 * 1024
+
 STROKES = []
 WARNINGS = []
 _COLOURS = set()
@@ -154,7 +159,21 @@ def run(path):
             "warnings": WARNINGS, "error": error}
 
 
+def limit_resources():
+    """End this process after LIMIT_SECONDS and cap its memory.  Does
+    nothing on Windows."""
+    try:
+        import resource
+        import signal
+    except ImportError:
+        return
+    signal.alarm(LIMIT_SECONDS)          # default action: end the process
+    resource.setrlimit(resource.RLIMIT_CPU, (LIMIT_SECONDS, LIMIT_SECONDS))
+    resource.setrlimit(resource.RLIMIT_AS, (LIMIT_MEMORY, LIMIT_MEMORY))
+
+
 def main(argv):
+    limit_resources()
     if len(argv) != 2:
         result = {"strokes": [], "warnings": [],
                   "error": {"type": "Usage", "line": None,
