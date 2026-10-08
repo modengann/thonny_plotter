@@ -64,7 +64,7 @@ Parses with `ast` (never executes). Rules:
   (both `import x` and `from x import ...`).
 - Banned names when called or referenced: `open`, `exec`, `eval`, `compile`,
   `__import__`, `getattr`, `setattr`, `delattr`, `globals`, `locals`, `vars`,
-  `breakpoint`, `input` is allowed (run_turtle already handles it).
+  `breakpoint`. (`input` stays allowed; run_turtle already handles it.)
 - Banned attributes: any name starting with `_` (blocks dunder escapes and
   private turtle internals), plus `getcanvas`, `cv`, `tk` (the Tk canvas
   gives a route to Tcl `exec`).
@@ -98,7 +98,7 @@ No deletion from the web page (teacher clears the folder by hand if needed).
 - New optional config key `run_as` (default absent). When set,
   `run_student` prefixes the command with `sudo -n -u <run_as>`. Absent on
   Windows, so the laptop path is unchanged.
-- New optional config keys `stop_pin` (BCM number, default absent). When set
+- New optional config key `stop_pin` (BCM number, default absent). When set
   and `gpiozero` imports, a button on that pin (to ground, internal pull-up)
   triggers the same action as the on-screen STOP, via `root.after` so it runs
   on the Tk thread.
@@ -140,6 +140,8 @@ button (pin, ground), and the gotcha below.
 - **Tk file dialog on Linux** is the plain Tk one, not the native dialog. It
   works; it looks dated.
 - **OctoPrint** must be off or uninstalled, or it will hold the serial port.
+- **Line endings.** `pi/*.sh` and `pi/*.service` must be LF or bash and
+  systemd choke on the ``. A `.gitattributes` rule forces `eol=lf` for them.
 
 ## Error handling
 
