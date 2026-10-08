@@ -387,6 +387,11 @@ upload_server.py, stop_button.py, run_turtle self-limits (Linux), dashboard
 services, docs/PI_SETUP.md. All 12 test files pass. Run setup with
 `sudo bash pi/setup.sh` (scp from Windows drops the exec bit).
 **STILL TO DO:** (1) Task 8 Pi bring-up at home (checklist at the end of
-the plan; no AX4 needed); (2) AX4 acceptance at school (plot, STOP, close
+the plan; no AX4 needed). Extra checks from the final review: upload a
+150 KB file from a browser (friendly "too big", not a reset); a Korean file
+name reads correctly in the Open dialog; kiosk shows the bottom row (Plot,
+STOP); `while True: pass` and `time.sleep(999)` both end within 25 s;
+`DISPLAY=:1 xhost` as the service user; a dead STOP button logs "STOP
+button on GPIO .. is not working" in journalctl. (2) AX4 acceptance at school (plot, STOP, close
 all browsers mid-plot). Progress ledger:
 `.superpowers/sdd/2026-10-08-pi-web-host/progress.md`.
