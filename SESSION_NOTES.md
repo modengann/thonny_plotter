@@ -370,3 +370,14 @@ list->tuple conversion for `pen_offset`, and missing/corrupt files.
 - `connect()` currently calls `G28` itself. That is a collision risk with a pen
   fitted and must be gated behind a confirmation before Phase 3.
 - `plotter.py --jog` is interactive; Phase 3 replaces it with a script.
+
+## Pi web host - DESIGN (2026-10-08)
+Teacher chose option A: run the unchanged Tk dashboard on a Raspberry Pi
+(reused OctoPrint Pi, reserved IP) inside Xvfb, shown in browsers via
+x11vnc -shared + noVNC (:6080), plus a Flask upload page (:8000) that
+static-checks student code (ast allowlist: turtle/math/random/time/colorsys)
+and saves to uploads/. Open access for students; student code runs as a
+limited `plotstudent` user; optional GPIO STOP button. Teacher has the Pi at
+home, not the AX4: build and check the whole Pi stack at home, AX4 test at
+school. Spec: `docs/superpowers/specs/2026-10-08-pi-web-host-design.md`
+(committed, awaiting teacher review). Next: implementation plan.
