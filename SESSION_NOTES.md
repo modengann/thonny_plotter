@@ -186,13 +186,13 @@ X,Y readout (2026-10-06): under the jog pad, 'X ... Y ... mm from origin'
 hold-jog. For finding/noting the paper edges. Reads 'not calibrated' until
 stage 5 - values are only as good as $100/$101. NOT YET TRIED ON HARDWARE
 (assumes the AX4's '?' reply includes WPos, as seen in HARDWARE_NOTES).
-Uncommitted.
+
 Go-to buttons (2026-10-06): 'Go to (pen up)' pad - Top L/Top R/Bot L/Bot R
 (corners of the dashed margin area, +/-129.7 x +/-98.0 mm) and Origin.
 Enabled only once the origin is set; pen up, travel_feed. Runs in a worker
 thread (_run_move, shared with hold-jog) registered as self._worker, so STOP
 works mid-move and the thread recovers. Side effect: hold-jog now also
-recovers properly after STOP. NOT YET TRIED ON HARDWARE. Uncommitted.
+recovers properly after STOP. NOT YET TRIED ON HARDWARE.
 Size tooltip (2026-10-08): hovering the Scale % box shows 'Estimated size:
 W x H mm at N%' once a file/text is loaded (Tooltip class + size_tip() in
 dashboard.py).
