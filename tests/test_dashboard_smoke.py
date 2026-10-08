@@ -7,10 +7,13 @@ few buttons.  No plotter, but needs a display (fine on the teacher laptop).
 
 import gc
 import os
+import shutil
 import sys
+import tempfile
 import time
 import tkinter as tk
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -352,6 +355,64 @@ class TestWizards(unittest.TestCase):
             self.assertTrue(d.check.calibrated)
             self.assertFalse(d.backend.origin_set)
             w.destroy()
+        finally:
+            close(root)
+
+
+class TestPiHost(unittest.TestCase):
+
+    def test_open_starts_in_uploads_only_if_it_exists(self):
+        root, d = make(FakeGrbl())
+        tmp = tempfile.mkdtemp()
+        try:
+            with mock.patch.object(dashboard.logic, "UPLOADS", tmp):
+                self.assertEqual(d.open_dir(), tmp)
+            with mock.patch.object(dashboard.logic, "UPLOADS",
+                                   os.path.join(tmp, "missing")):
+                self.assertIsNone(d.open_dir())
+        finally:
+            close(root)
+            shutil.rmtree(tmp)
+
+    def test_refused_file_shows_why_and_cannot_plot(self):
+        root, d = make(FakeGrbl())
+        fd, path = tempfile.mkstemp(suffix=".py")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("import os\n")
+        try:
+            d.load_file(path)
+            self.assertIn("Line 1: ", d.info["text"])
+            self.assertEqual(d.strokes, [])
+            self.assertEqual(str(d.btn_plot["state"]), "disabled")
+        finally:
+            close(root)
+            os.remove(path)
+
+    def test_run_as_from_config_reaches_the_runner(self):
+        root, d = make(FakeGrbl())
+        try:
+            d.config["run_as"] = "plotstudent"
+            seen = {}
+
+            def fake_run(path, run_as=None):
+                seen["run_as"] = run_as
+                return {"strokes": [], "warnings": [], "error": None}
+
+            with mock.patch.object(dashboard.logic, "run_student", fake_run):
+                d.load_file(os.path.join(SAMPLES, "square.py"))
+            self.assertEqual(seen["run_as"], "plotstudent")
+        finally:
+            close(root)
+
+    def test_hardware_stop_button_presses_stop(self):
+        root, d = make(FakeGrbl())
+        try:
+            calls = []
+            d.on_stop = lambda: calls.append(1)
+            d._hw_stop.set()                 # what the GPIO thread does
+            pump(root, lambda: calls, seconds=3)
+            self.assertEqual(calls, [1])
+            self.assertFalse(d._hw_stop.is_set())
         finally:
             close(root)
 

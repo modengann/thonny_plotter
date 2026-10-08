@@ -10,12 +10,14 @@ First-time setup: docs/SETUP.md.
 import datetime
 import os
 import queue
+import sys
 import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import dashboard_logic as logic
+import stop_button
 from grbl_backend import GrblBackend, LETTER_MM, PlotStopped, usable_half
 from plotter import PlotterError, load_config, save_config
 
@@ -75,6 +77,9 @@ class Dashboard:
         self._jog_held = False       # an arrow button is pressed right now
         self._jog_timer = None       # pending "start holding" callback
         self.events = queue.Queue()
+        self._hw_stop = threading.Event()   # set by the physical STOP button
+        self._stop_button = stop_button.attach(self.config.get("stop_pin"),
+                                               self._hw_stop.set)
         self._build()
         self.refresh()
         self._show_position()
@@ -474,9 +479,15 @@ class Dashboard:
         from dashboard_wizards import CalibrationWizard
         CalibrationWizard(self)
 
+    def open_dir(self):
+        """Start the Open dialog in uploads/ (filled by the Pi's upload
+        page) when it exists."""
+        return logic.UPLOADS if os.path.isdir(logic.UPLOADS) else None
+
     def on_open(self):
         path = filedialog.askopenfilename(
             parent=self.root, title="Open a student's turtle program",
+            initialdir=self.open_dir(),
             filetypes=[("Python files", "*.py"), ("All files", "*.*")])
         if path:
             self.load_file(path)
@@ -498,7 +509,8 @@ class Dashboard:
         self.root.config(cursor="watch")
         self.root.update_idletasks()
         try:
-            self.result = logic.run_student(path)
+            self.result = logic.run_student(path,
+                                            run_as=self.config.get("run_as"))
         finally:
             self.root.config(cursor="")
         self.strokes = self.result.get("strokes", [])
@@ -578,6 +590,9 @@ class Dashboard:
 
     def _poll(self):
         try:
+            if self._hw_stop.is_set():       # Tk calls only on this thread
+                self._hw_stop.clear()
+                self.on_stop()
             self._handle_events()
             if self.plotting:
                 self._show_timer()
@@ -724,8 +739,17 @@ class Dashboard:
         self.root.destroy()
 
 
-def main():
+def kiosk(root):
+    """Fill the whole (virtual) screen - used on the Raspberry Pi."""
+    root.geometry("%dx%d+0+0" % (root.winfo_screenwidth(),
+                                 root.winfo_screenheight()))
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
     root = tk.Tk()
+    if "--kiosk" in argv:
+        kiosk(root)
     Dashboard(root)
     root.mainloop()
 
