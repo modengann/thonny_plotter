@@ -289,6 +289,14 @@ class TestHoldToJog(unittest.TestCase):
         b.move(12.5, -3, 1500)
         self.assertEqual(b.position(), (12.5, -3.0))
 
+    def test_work_position_is_measured_from_the_origin(self):
+        b, fake = connected()
+        b.jog(20, 10)
+        b.set_origin()
+        b.jog(-5, 2.5)
+        self.assertEqual(b.work_position(), (-5.0, 2.5))
+        self.assertEqual(b.position(), (15.0, 12.5))
+
     def test_moves_in_short_steps_while_held(self):
         import time
         b, fake = connected()

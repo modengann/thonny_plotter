@@ -186,6 +186,58 @@ class TestHoldToJog(unittest.TestCase):
             close(root)
 
 
+class TestPositionReadout(unittest.TestCase):
+
+    def test_shows_head_position_from_the_origin(self):
+        root, d = make(FakeGrbl())
+        try:
+            self.assertIn("---", d.pos_label["text"])
+            d.on_connect()
+            d.backend.jog(30, 40)
+            d._try(d.backend.set_origin)
+            self.assertIn("X     0.0  Y     0.0", d.pos_label["text"])
+            d.on_jog_press(-1, 0)
+            d.on_jog_release()
+            pump(root, lambda: not d.jogging)
+            self.assertIn("X   -10.0  Y     0.0", d.pos_label["text"])
+            self.assertIn("from origin", d.pos_label["text"])
+        finally:
+            close(root)
+
+
+class TestGoTo(unittest.TestCase):
+
+    def test_goto_needs_an_origin(self):
+        root, d = make(FakeGrbl())
+        try:
+            d.on_connect()
+            self.assertTrue(all(str(b["state"]) == "disabled"
+                                for b in d.goto_buttons))
+            d._try(d.backend.set_origin)
+            self.assertTrue(all(str(b["state"]) == "normal"
+                                for b in d.goto_buttons))
+        finally:
+            close(root)
+
+    def test_goto_corner_then_origin(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            d._try(d.backend.set_origin)
+            hx, hy = d.half
+            d.on_goto(-1, 1)
+            pump(root, lambda: not d.jogging)
+            self.assertIn("G1 X%.3f Y%.3f F3000" % (-hx, hy), fake.sent)
+            self.assertIn("X  %6.1f  Y  %6.1f" % (-hx, hy), d.pos_label["text"])
+            d.on_goto(0, 0)
+            pump(root, lambda: not d.jogging)
+            self.assertEqual(fake.sent[-2], "G1 X0.000 Y0.000 F3000")
+            self.assertIn("X     0.0  Y     0.0", d.pos_label["text"])
+        finally:
+            close(root)
+
+
 class TestTextBox(unittest.TestCase):
 
     def test_typed_text_becomes_a_plottable_drawing(self):

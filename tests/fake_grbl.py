@@ -25,6 +25,7 @@ class FakeGrbl:
         self.on_line = None     # test hook: called with each text line
         self.pos = [0.0, 0.0]   # machine position; moves finish instantly
         self.relative = False
+        self.offset = [0.0, 0.0]  # set by G92: work position = pos - offset
         self._pending = ["", BANNER] if banner else []
 
     def write(self, data):
@@ -34,9 +35,11 @@ class FakeGrbl:
         if data == b"?":
             self._pending.append(
                 "<Idle,MPos:%.3f,%.3f,0.000,WPos:%.3f,%.3f,0.000>"
-                % (self.pos[0], self.pos[1], self.pos[0], self.pos[1]))
+                % (self.pos[0], self.pos[1], self.pos[0] - self.offset[0],
+                   self.pos[1] - self.offset[1]))
             return 1
         if data == b"\x18":
+            self.offset = [0.0, 0.0]    # a reset forgets G92
             self._pending += ["", BANNER]
             return 1
         line = data.decode("ascii").strip()
@@ -57,12 +60,15 @@ class FakeGrbl:
             self.relative = True
         elif line == "G90":
             self.relative = False
+        elif line.startswith("G92"):
+            self.offset = list(self.pos)
         elif line.startswith("G1 "):
             for i, axis in enumerate("XY"):
                 m = re.search(axis + r"(-?[\d.]+)", line)
                 if m:
                     v = float(m.group(1))
-                    self.pos[i] = self.pos[i] + v if self.relative else v
+                    self.pos[i] = (self.pos[i] + v if self.relative
+                                   else v + self.offset[i])
 
     def readline(self):
         if self.fail_reads:

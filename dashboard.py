@@ -48,6 +48,7 @@ class Dashboard:
         self.events = queue.Queue()
         self._build()
         self.refresh()
+        self._show_position()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         root.after(100, self._poll)
 
@@ -90,6 +91,24 @@ class Dashboard:
             b.bind("<ButtonRelease-1>", lambda e: self.on_jog_release())
             b.grid(row=row, column=col)
             self.jog_buttons.append(b)
+        # where the head is, so the sheet's edges can be found and noted
+        self.pos_label = ttk.Label(left, justify="center",
+                                   font=("Courier", 10, "bold"))
+        self.pos_label.pack(pady=(6, 0))
+        ttk.Label(left, text="Go to (pen up)").pack(pady=(10, 0))
+        goto = ttk.Frame(left)
+        goto.pack()
+        self.goto_buttons = []
+        # corners of the dashed drawable area; +Y is the top of the sheet
+        for text, fx, fy, row, col in (("Top L", -1, 1, 0, 0),
+                                       ("Top R", 1, 1, 0, 2),
+                                       ("Origin", 0, 0, 1, 1),
+                                       ("Bot L", -1, -1, 2, 0),
+                                       ("Bot R", 1, -1, 2, 2)):
+            b = ttk.Button(goto, text=text, width=6,
+                           command=lambda fx=fx, fy=fy: self.on_goto(fx, fy))
+            b.grid(row=row, column=col)
+            self.goto_buttons.append(b)
         self.btn_origin = ttk.Button(left, text="Set origin here",
                                      command=self.on_set_origin)
         self.btn_pen_up = ttk.Button(left, text="Pen up",
@@ -172,6 +191,31 @@ class Dashboard:
     def _sync_from_backend(self):
         self.check.connected = self.backend.connected
         self.check.origin_set = self.backend.origin_set
+        self._read_position()
+
+    def _read_position(self):
+        """Ask the plotter where the head is, unless a plot or jog thread
+        is using the port (then it keeps backend.work_pos fresh itself)."""
+        worker = self._worker
+        if (self.backend.connected and not self.plotting and not self.jogging
+                and (worker is None or not worker.is_alive())):
+            try:
+                self.backend.work_position()
+            except PlotterError:
+                pass
+        self._show_position()
+
+    def _show_position(self):
+        pos = self.backend.work_pos if self.backend.connected else None
+        if pos is None:
+            self.pos_label.config(text="X   ---   Y   ---")
+            return
+        where = ("from origin" if self.backend.origin_set
+                 else "from start (no origin)")
+        if not self.check.calibrated:
+            where += "\nnot calibrated"
+        self.pos_label.config(text="X %7.1f  Y %7.1f\nmm %s"
+                              % (pos[0], pos[1], where))
 
     def refresh(self):
         c = self.check
@@ -197,6 +241,8 @@ class Dashboard:
         for b in self.jog_buttons:       # stay live while held
             b.config(state="normal" if c.connected and not self.plotting
                      else "disabled")
+        for b in self.goto_buttons:
+            b.config(state="normal" if ready and c.origin_set else "disabled")
         for b in [self.btn_origin, self.btn_pen_up,
                   self.btn_pen_down, self.btn_change,
                   self.btn_pen_setup, self.btn_calibrate]:
@@ -318,16 +364,41 @@ class Dashboard:
         self._jog_timer = None
         if not self._jog_held:
             return
+        self._run_move(self.backend.jog_hold, dx, dy, lambda: self._jog_held)
+
+    def on_goto(self, fx, fy):
+        """Travel to the origin (0, 0) or a corner of the drawable area."""
+        if self.plotting or self.jogging or not self.backend.origin_set:
+            return
+        x, y = fx * self.half[0], fy * self.half[1]
+        feed = self.config["travel_feed"]
+
+        def go():
+            self.backend.pen(False)
+            self.backend.move(x, y, feed)
+            self.backend.wait()
+        self._run_move(go)
+
+    def _run_move(self, action, *args):
+        """Move the head in a worker thread, so the window (and STOP) stay
+        live.  Registered as self._worker so on_stop leaves recovery to it."""
         self.jogging = True
         self.refresh()
 
         def work():
             try:
-                self.backend.jog_hold(dx, dy, lambda: self._jog_held)
+                action(*args)
                 self.events.put(("jog_done",))
+            except PlotStopped:
+                try:
+                    self.backend.recover()
+                    self.events.put(("jog_stopped",))
+                except PlotterError as e:
+                    self.events.put(("jog_error", e))
             except PlotterError as e:
                 self.events.put(("jog_error", e))
-        threading.Thread(target=work, daemon=True).start()
+        self._worker = threading.Thread(target=work, daemon=True)
+        self._worker.start()
 
     def on_set_origin(self):
         if messagebox.askokcancel(
@@ -472,6 +543,8 @@ class Dashboard:
             self._handle_events()
             if self.plotting:
                 self._show_timer()
+            if self.jogging:
+                self._show_position()
         finally:                 # keep polling even if a callback fails
             self.root.after(100, self._poll)
 
@@ -484,13 +557,19 @@ class Dashboard:
                     if self._job:
                         self._job["done"] = ev[1]
                     continue
-                if ev[0] in ("jog_done", "jog_error"):
+                if ev[0] in ("jog_done", "jog_error", "jog_stopped"):
+                    if self._worker is not None:
+                        self._worker.join(1)   # it has just put this event
                     self.jogging = False
                     self._sync_from_backend()
                     self.refresh()
                     if ev[0] == "jog_error":
                         messagebox.showerror("Plotter", str(ev[1]),
                                              parent=self.root)
+                    elif ev[0] == "jog_stopped":
+                        messagebox.showinfo(
+                            "Stopped", "Move stopped.  The pen is up.\nSet "
+                            "the origin again.", parent=self.root)
                     continue
                 self.plotting = False
                 self.paused = False

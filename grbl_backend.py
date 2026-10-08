@@ -82,6 +82,7 @@ class GrblBackend:
         self.origin_set = False
         self.paused = False
         self._stopping = False
+        self.work_pos = None         # (x, y) from the origin, last "?" seen
 
     # ---- connection -----------------------------------------------------
 
@@ -246,8 +247,16 @@ class GrblBackend:
             line = self._readline()
             m = re.search(r"MPos:(-?[\d.]+),(-?[\d.]+)", line)
             if m:
+                w = re.search(r"WPos:(-?[\d.]+),(-?[\d.]+)", line)
+                if w:
+                    self.work_pos = (float(w.group(1)), float(w.group(2)))
                 return float(m.group(1)), float(m.group(2))
         raise PlotterError("The plotter didn't report its position.")
+
+    def work_position(self):
+        """(x, y) in mm from the origin (GRBL's WPos), or None if unknown."""
+        self.position()
+        return self.work_pos
 
     def jog_hold(self, dx, dy, keep_going, step=3.0, feed=900, max_mm=100.0):
         """Move in direction (dx, dy) for as long as keep_going() is True.

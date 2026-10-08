@@ -181,6 +181,20 @@ Hold-to-jog (2026-10-05): click an arrow = one 1/10 mm step; hold >0.3 s =
 continuous move (3 mm moves at F900 ~15 mm/s, next sent when head is half a
 step from the end, via '?' MPos). Stops within ~5 mm of release; capped at
 100 mm per hold (no limit switches). NOT YET TRIED ON HARDWARE.
+X,Y readout (2026-10-06): under the jog pad, 'X ... Y ... mm from origin'
+(GRBL WPos via '?'), refreshed after every button/jog and live during a
+hold-jog. For finding/noting the paper edges. Reads 'not calibrated' until
+stage 5 - values are only as good as $100/$101. NOT YET TRIED ON HARDWARE
+(assumes the AX4's '?' reply includes WPos, as seen in HARDWARE_NOTES).
+Uncommitted.
+Go-to buttons (2026-10-06): 'Go to (pen up)' pad - Top L/Top R/Bot L/Bot R
+(corners of the dashed margin area, +/-129.7 x +/-98.0 mm) and Origin.
+Enabled only once the origin is set; pen up, travel_feed. Runs in a worker
+thread (_run_move, shared with hold-jog) registered as self._worker, so STOP
+works mid-move and the thread recovers. Side effect: hold-jog now also
+recovers properly after STOP. NOT YET TRIED ON HARDWARE. Uncommitted.
+Tk "application has been destroyed" noise in test_dashboard_smoke is
+pre-existing (also on HEAD); tests still pass.
 Classroom workflow: Candle off -> dashboard.py -> Connect -> sheet centred ->
 jog to centre -> Set origin -> Open student file -> Plot; swap sheets between
 students without moving the head (plots end at the centre).
