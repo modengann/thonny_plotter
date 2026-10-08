@@ -380,4 +380,13 @@ and saves to uploads/. Open access for students; student code runs as a
 limited `plotstudent` user; optional GPIO STOP button. Teacher has the Pi at
 home, not the AX4: build and check the whole Pi stack at home, AX4 test at
 school. Spec: `docs/superpowers/specs/2026-10-08-pi-web-host-design.md`
-(committed, awaiting teacher review). Next: implementation plan.
+(approved). Plan: `docs/superpowers/plans/2026-10-08-pi-web-host.md`.
+**CODE COMPLETE (2026-10-08), tested on Windows only:** code_check.py,
+upload_server.py, stop_button.py, run_turtle self-limits (Linux), dashboard
+--kiosk / uploads dir / run_as / GPIO STOP, pi/ setup.sh + 4 systemd
+services, docs/PI_SETUP.md. All 12 test files pass. Run setup with
+`sudo bash pi/setup.sh` (scp from Windows drops the exec bit).
+**STILL TO DO:** (1) Task 8 Pi bring-up at home (checklist at the end of
+the plan; no AX4 needed); (2) AX4 acceptance at school (plot, STOP, close
+all browsers mid-plot). Progress ledger:
+`.superpowers/sdd/2026-10-08-pi-web-host/progress.md`.
