@@ -14,7 +14,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PI = os.path.join(ROOT, "pi")
-SCRIPTS = ("setup.sh", "start-display.sh")
+SCRIPTS = ("setup.sh", "start-display.sh", "deploy.sh")
 SERVICES = ("plotter-display.service", "plotter-vnc.service",
             "plotter-novnc.service", "plotter-upload.service")
 

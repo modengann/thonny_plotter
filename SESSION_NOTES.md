@@ -384,8 +384,9 @@ school. Spec: `docs/superpowers/specs/2026-10-08-pi-web-host-design.md`
 **CODE COMPLETE (2026-10-08), tested on Windows only:** code_check.py,
 upload_server.py, stop_button.py, run_turtle self-limits (Linux), dashboard
 --kiosk / uploads dir / run_as / GPIO STOP, pi/ setup.sh + 4 systemd
-services, docs/PI_SETUP.md. All 12 test files pass. Run setup with
-`sudo bash pi/setup.sh` (scp from Windows drops the exec bit).
+services, docs/PI_SETUP.md. All 12 test files pass. Deploy from the
+laptop with `bash pi/deploy.sh <user>@<pi-ip>` (git push over SSH, then
+runs `sudo bash pi/setup.sh` on the Pi; only committed work is sent).
 **STILL TO DO:** (1) Task 8 Pi bring-up at home (checklist at the end of
 the plan; no AX4 needed). Extra checks from the final review: upload a
 150 KB file from a browser (friendly "too big", not a reset); a Korean file

@@ -21,26 +21,39 @@ their programs from a web page.  Plots keep going when every browser closes.
 
 ## First-time setup
 
-1. Copy the project folder to the Pi.  From Git Bash on the laptop:
+The code goes to the Pi with git, over SSH.  Everything below runs in Git
+Bash on the laptop, in the project folder.
 
-       scp -r ~/claude_code/thonny_plotter <user>@<pi-ip>:~/ax4plotter
+1. **SSH key (once), so you aren't asked for the Pi's password every time:**
 
-2. On the Pi:
+       ssh-keygen -t ed25519            (press Enter through the questions)
+       cat ~/.ssh/id_ed25519.pub | ssh <user>@<pi-ip> "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 
-       cd ~/ax4plotter
-       sudo bash pi/setup.sh
+2. **Commit the pen settings you want on the Pi.**  Only committed work is
+   sent, and the Pi takes `plotter_config.json` from the first deploy.
+   After that the Pi keeps its own copy.
 
-   It installs what it needs, turns OctoPrint off, copies the program to
-   `/opt/ax4plotter`, and starts four services.  It prints the two addresses
-   at the end.
+3. **Deploy:**
 
-3. Open the dashboard address in a browser.  You should see the dashboard.
-4. Plug in the AX4 and go through the usual checklist: Connect, pen setup,
+       bash pi/deploy.sh <user>@<pi-ip>
+
+   It sets up `~/ax4plotter` on the Pi (installing git if needed), pushes
+   the current branch, then runs `pi/setup.sh` there.  Setup installs what
+   it needs, turns OctoPrint off, copies the program to `/opt/ax4plotter`,
+   and starts four services.  It asks for your password on the Pi once (for
+   `sudo`) and prints the two addresses at the end.
+
+4. Open the dashboard address in a browser.  You should see the dashboard.
+5. Plug in the AX4 and go through the usual checklist: Connect, pen setup,
    origin.
 
-To update later: copy the folder again and re-run `sudo bash pi/setup.sh`.
-The Pi's own `plotter_config.json` (pen and calibration settings) and the
-uploads are kept.
+**To update later:** commit, then `bash pi/deploy.sh` (the Pi's address is
+remembered).  The Pi's own `plotter_config.json` (pen and calibration
+settings) and the uploads are kept.  Deploying restarts the dashboard, so
+set the origin again afterwards.
+
+Don't edit files on the Pi itself: the next deploy refuses to update a
+folder with local changes.  Make changes on the laptop and deploy.
 
 ## Things to know
 
@@ -76,7 +89,7 @@ switch is still the last resort.
 | Dashboard page won't load | `sudo systemctl status plotter-display plotter-vnc plotter-novnc` |
 | Black screen in the browser | `sudo systemctl restart plotter-display plotter-vnc` |
 | Upload page won't load | `sudo systemctl status plotter-upload` |
-| "Couldn't run the program as user plotstudent" | Re-run `sudo bash pi/setup.sh` |
+| "Couldn't run the program as user plotstudent" | Run `bash pi/deploy.sh` again |
 | Connect says the plotter isn't found | Check the USB cable; `ls /dev/ttyUSB*` should list a port |
 | Connect says the port is in use | `sudo systemctl disable --now octoprint` |
 | See recent errors | `journalctl -u plotter-display -n 50` |

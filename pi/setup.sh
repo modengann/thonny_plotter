@@ -1,8 +1,9 @@
 #!/bin/bash
 # One-time (and update) setup of the AX4 plotter on a Raspberry Pi.
-# Copy the project folder to the Pi, then from inside it run:
+# Normally run for you by pi/deploy.sh (from the laptop).  By hand, from
+# the project folder on the Pi:
 #     sudo bash pi/setup.sh
-# Safe to run again after copying a newer version: it keeps the Pi's
+# Safe to run again after deploying a newer version: it keeps the Pi's
 # plotter_config.json and the uploads.
 set -euo pipefail
 
