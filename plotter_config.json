@@ -8,8 +8,11 @@
   "paper": "letter",
   "pen_down_s": 80,
   "pen_down_z": 10.0,
-  "pen_offset": [0.0, 0.0],
-  "pen_setup_done": "2026-10-04",
+  "pen_offset": [
+    0.0,
+    0.0
+  ],
+  "pen_setup_done": "2026-10-05",
   "pen_touch_s": 60,
   "pen_up_z": 15.0,
   "servo_wait_s": 0.3,
