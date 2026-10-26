@@ -256,6 +256,9 @@ part-way.
 Students: write normal turtle programs (`import turtle`) and email the .py
 file. They do not need plotter.py. `input()`, colours, fills and text are
 not plotted; the dashboard says so.
+Photo programs (`photo_tools.load_photo`) need the photo too: put it in a
+`photos` folder next to the .py before opening it (needs Pillow:
+`python -m pip install pillow`).
 
 Manual check after changing dashboard code:
 - [ ] Opens with Plot disabled and the checklist unticked except Pen set up.

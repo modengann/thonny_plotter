@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 
@@ -88,6 +89,32 @@ class TestRunner(unittest.TestCase):
         r = run_sample("nothing.py")
         self.assertIsNone(r["error"])
         self.assertEqual(r["strokes"], [])
+
+    def test_photo_program_draws_from_its_photo(self):
+        # photos/Dots.PNG next to the program; the code says "dots.png"
+        r = run_sample("portrait.py")
+        self.assertIsNone(r["error"])
+        self.assertEqual(r["strokes"], [[[0, 0], [5, 0]],
+                                        [[30, -10], [35, -10]]])
+
+    def test_missing_photo_is_reported(self):
+        r = run_sample("missing_photo.py")
+        self.assertEqual(r["error"]["type"], "PhotoError")
+        self.assertEqual(r["error"]["line"], 4)
+        self.assertIn("nobody.jpg", r["error"]["message"])
+        self.assertIn("Dots.PNG", r["error"]["message"])   # lists what's there
+
+
+class TestPhotoFolder(unittest.TestCase):
+
+    def test_uploaded_photos_folder_wins(self):
+        with tempfile.TemporaryDirectory() as d:
+            program = os.path.join(d, "ana_20261026-090000.py")
+            self.assertEqual(run_turtle.photo_folder(program),
+                             os.path.join(d, "photos"))
+            os.mkdir(os.path.join(d, "ana_20261026-090000_photos"))
+            self.assertEqual(run_turtle.photo_folder(program),
+                             os.path.join(d, "ana_20261026-090000_photos"))
 
 
 @unittest.skipUnless(hasattr(__import__("signal"), "alarm"), "Linux/Mac only")

@@ -396,3 +396,22 @@ STOP); `while True: pass` and `time.sleep(999)` both end within 25 s;
 button on GPIO .. is not working" in journalctl. (2) AX4 acceptance at school (plot, STOP, close
 all browsers mid-plot). Progress ledger:
 `.superpowers/sdd/2026-10-08-pi-web-host/progress.md`.
+
+## Photo programs / photo_tools (2026-10-26)
+Student repo github.com/moden-coding/turtle_plotter has `portrait.py`
+(Pixels in Ink) using `from photo_tools import load_photo, preview,
+show_numbers`. The plotter now runs it:
+- `photo_tools.py` copied verbatim from the student repo (keep in sync if
+  the student version changes). Allowed in `code_check.ALLOWED_MODULES`.
+- `run_turtle.install_photo_tools()` points `PHOTO_FOLDER` at
+  `<program>_photos/` (upload page) or `photos/` next to the .py, makes
+  `preview()` a no-op, matches photo names ignoring case (Pi is Linux; the
+  sample student file says .jpg for a .JPG). `PhotoError` (a SystemExit) is
+  reported as an error instead of silently drawing nothing.
+- Upload page has an optional Photo box: JPG/PNG/GIF/BMP/WEBP, 15 MB, no
+  HEIC; saved under its own name in `uploads/<saved stem>_photos/`.
+- Pi: `python3-pil` added to setup.sh (re-deploy needed).
+- Student README says "push your photo AND your code to GitHub" - the
+  plotter has no GitHub fetch; students use the upload page's Photo box.
+- Real student portrait.py checked offline: 1262 strokes, no errors.
+  Not yet tried on the Pi.

@@ -12,7 +12,8 @@ the plotter or the project files, with a time limit.
 
 import ast
 
-ALLOWED_MODULES = ("turtle", "math", "random", "time", "colorsys")
+ALLOWED_MODULES = ("turtle", "math", "random", "time", "colorsys",
+                   "photo_tools")      # the plotter's own copy
 
 # Built-ins that reach files, other code, or anything by name.
 BANNED_NAMES = {"open", "exec", "eval", "compile", "__import__", "getattr",

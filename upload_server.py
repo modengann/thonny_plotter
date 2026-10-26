@@ -5,7 +5,9 @@ upload_server.py  -  the students' upload page on the Raspberry Pi.
 
 Students pick a .py file and type their name.  The program is checked
 (code_check.py) and, if it is plain turtle code, saved in uploads/ where
-the dashboard's Open dialog starts.  The page also links to the dashboard
+the dashboard's Open dialog starts.  A photo for photo_tools.load_photo
+can come with it; it is saved in uploads/<program>_photos/ under its own
+name, which is where run_turtle.py points photo_tools.  The page also links to the dashboard
 itself (noVNC, port 6080).
 """
 
@@ -24,6 +26,9 @@ MAX_BYTES = 100 * 1024
 SHOW = 20
 DASHBOARD_PORT = 6080
 TOO_BIG = "That file is too big for a turtle program (over 100 KB)."
+MAX_PHOTO_BYTES = 15 * 1024 * 1024
+PHOTO_TYPES = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")
+PHOTO_TOO_BIG = "That photo is too big (over 15 MB)."
 
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -42,13 +47,16 @@ PAGE = """<!doctype html>
 <h1>AX4 Plotter</h1>
 <a class="dash" href="{{ dashboard }}">Open the plotter dashboard</a>
 <h2>Upload your turtle program</h2>
-{% if saved %}<p class="ok">Uploaded as <b>{{ saved }}</b>.
+{% if saved %}<p class="ok">Uploaded as <b>{{ saved }}</b>{% if photo %}
+ with the photo <b>{{ photo }}</b>{% endif %}.
  Open it from the dashboard with "Open student file...".</p>{% endif %}
 {% if problems %}<div class="bad"><p>Not uploaded:</p><ul>
  {% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul></div>{% endif %}
 <form method="post" enctype="multipart/form-data">
  <label>Your name <input name="name" maxlength="30" value="{{ name }}"></label><br>
- <input type="file" name="file" accept=".py"><br>
+ <label>Program <input type="file" name="file" accept=".py"></label><br>
+ <label>Photo (only if your program uses load_photo)
+  <input type="file" name="photo" accept="image/*"></label><br>
  <button type="submit">Upload</button>
 </form>
 <h2>Recent uploads</h2>
@@ -106,10 +114,35 @@ def _read_upload(upload):
     return source, code_check.check(source)
 
 
+def _read_photo(upload):
+    """(name, data, problems) for an uploaded photo.  No photo is fine."""
+    if upload is None or not upload.filename:
+        return None, None, []
+    name = upload.filename.replace("\\", "/").split("/")[-1].strip()
+    if not name or name.startswith("."):
+        return None, None, ["The photo needs a name, like dog.jpg."]
+    if not name.lower().endswith(PHOTO_TYPES):
+        return None, None, ["The photo should be a .jpg or .png.  iPhone "
+                            ".heic photos: export them as JPEG first."]
+    data = upload.read(MAX_PHOTO_BYTES + 1)
+    if len(data) > MAX_PHOTO_BYTES:
+        return None, None, [PHOTO_TOO_BIG]
+    return name, data, []
+
+
+def save_photo(folder, program, name, data):
+    """Save the photo where run_turtle.py looks for this program's."""
+    photos = os.path.join(folder, os.path.splitext(program)[0] + "_photos")
+    os.makedirs(photos, exist_ok=True)
+    with open(os.path.join(photos, name), "wb") as f:
+        f.write(data)
+
+
 def create_app(folder=UPLOADS):
     os.makedirs(folder, exist_ok=True)
     app = Flask(__name__)
-    app.config["MAX_CONTENT_LENGTH"] = MAX_BYTES + 16 * 1024   # form overhead
+    app.config["MAX_CONTENT_LENGTH"] = (MAX_BYTES + MAX_PHOTO_BYTES
+                                        + 16 * 1024)       # form overhead
 
     def page(status=200, **values):
         host = request.host.split(":")[0]
@@ -126,13 +159,18 @@ def create_app(folder=UPLOADS):
             return page()
         name = request.form.get("name", "")
         source, problems = _read_upload(request.files.get("file"))
+        photo, data, photo_problems = _read_photo(request.files.get("photo"))
+        problems = problems + photo_problems
         if problems:
             return page(problems=problems, name=name)
-        return page(saved=save_upload(folder, name, source), name=name)
+        saved = save_upload(folder, name, source)
+        if photo:
+            save_photo(folder, saved, photo, data)
+        return page(saved=saved, photo=photo, name=name)
 
     @app.errorhandler(413)
     def too_big(e):
-        return page(413, problems=[TOO_BIG])
+        return page(413, problems=[PHOTO_TOO_BIG])       # only a photo can be
 
     return app
 

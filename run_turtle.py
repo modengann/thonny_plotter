@@ -27,6 +27,8 @@ import sys
 import traceback
 import turtle
 
+import photo_tools
+
 W_FILL = "Fill is drawn as an outline only."
 W_WRITE = "Text from write() is not drawn."
 W_DOT = "dot() and stamp() are not drawn."
@@ -127,6 +129,39 @@ def install():
     builtins.input = _no_input
 
 
+def photo_folder(path):
+    """Where a student's photos are: <name>_photos/ from the upload page,
+    or photos/ next to the program (a copy of the student's project)."""
+    folder = os.path.dirname(os.path.abspath(path))
+    uploaded = os.path.join(folder,
+                            os.path.splitext(os.path.basename(path))[0]
+                            + "_photos")
+    if os.path.isdir(uploaded):
+        return uploaded
+    return os.path.join(folder, "photos")
+
+
+def install_photo_tools(path):
+    """Point the plotter's photo_tools at the student's photos.  preview()
+    does nothing here, and capitals in the photo's name don't matter (the
+    Pi is Linux; the students' laptops are not)."""
+    photo_tools.PHOTO_FOLDER = photo_folder(path)
+    photo_tools.preview = _noop
+    find = photo_tools._find
+
+    def find_any_case(filename):
+        try:
+            return find(filename)
+        except photo_tools.PhotoError:
+            if isinstance(filename, str):
+                name = os.path.basename(filename).lower()
+                for f in photo_tools._photo_files():
+                    if f.lower() == name:
+                        return os.path.join(photo_tools.PHOTO_FOLDER, f)
+            raise
+    photo_tools._find = find_any_case
+
+
 def _student_line(exc, path):
     """The line in the student's file where things went wrong."""
     if isinstance(exc, SyntaxError) and exc.lineno:
@@ -145,7 +180,11 @@ def run(path):
     sys.stdout = sys.stderr          # student print() must not spoil the JSON
     try:
         install()
+        install_photo_tools(path)
         runpy.run_path(path, run_name="__main__")
+    except photo_tools.PhotoError as e:      # a SystemExit, but report it
+        error = {"type": "PhotoError", "message": str(e).strip(),
+                 "line": _student_line(e, path)}
     except SystemExit:
         pass
     except BaseException as e:

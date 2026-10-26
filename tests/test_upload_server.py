@@ -136,6 +136,47 @@ class TestPage(TempFolder):
         self.assertEqual(self.saved(), [])
         self.assertIn(b"Choose a file", r.data)
 
+    def post_with_photo(self, filename, data, code=GOOD):
+        return self.client.post(
+            "/", data={"name": "Ana", "file": (io.BytesIO(code), "p.py"),
+                       "photo": (io.BytesIO(data), filename)},
+            content_type="multipart/form-data")
+
+    def test_photo_is_saved_next_to_the_program_under_its_own_name(self):
+        r = self.post_with_photo("Gann Entrance.JPG", b"jpeg bytes")
+        program = [f for f in self.saved() if f.endswith(".py")][0]
+        photos = os.path.join(self.dir, program[:-3] + "_photos")
+        self.assertEqual(os.listdir(photos), ["Gann Entrance.JPG"])
+        with open(os.path.join(photos, "Gann Entrance.JPG"), "rb") as f:
+            self.assertEqual(f.read(), b"jpeg bytes")
+        self.assertIn(b"Gann Entrance.JPG", r.data)
+
+    def test_photo_path_is_ignored(self):
+        self.post_with_photo("..\\..\\evil.png", b"x")
+        program = [f for f in self.saved() if f.endswith(".py")][0]
+        self.assertEqual(
+            os.listdir(os.path.join(self.dir, program[:-3] + "_photos")),
+            ["evil.png"])
+
+    def test_heic_photo_is_refused_and_nothing_saved(self):
+        r = self.post_with_photo("IMG_1.HEIC", b"x")
+        self.assertEqual(self.saved(), [])
+        self.assertIn(b"JPEG", r.data)
+
+    def test_photo_with_bad_code_saves_nothing(self):
+        self.post_with_photo("dog.jpg", b"x", code=b"import os\n")
+        self.assertEqual(self.saved(), [])
+
+    def test_too_big_photo(self):
+        with mock.patch.object(us, "MAX_PHOTO_BYTES", 10):
+            r = self.post_with_photo("dog.jpg", b"x" * 11)
+        self.assertEqual(self.saved(), [])
+        self.assertIn(b"too big", r.data)
+
+    def test_photo_tools_program_is_accepted(self):
+        self.post("Ana", "p.py", b"from photo_tools import load_photo\n")
+        self.assertEqual(len(self.saved()), 1)
+
     def test_too_big_has_a_friendly_message(self):
         for size in (us.MAX_BYTES + 1, us.MAX_BYTES * 3):
             r = self.post("Ana", "x.py", b"#" * size)

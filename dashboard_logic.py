@@ -32,7 +32,7 @@ AX4_DEFAULTS = {
 }
 
 _PLAIN_ERRORS = ("Timeout", "KeyboardInputNotSupported", "RunnerFailed",
-                 "NotAllowed")
+                 "NotAllowed", "PhotoError")
 
 
 def ax4_config(raw):

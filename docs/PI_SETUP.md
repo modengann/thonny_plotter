@@ -63,12 +63,18 @@ folder with local changes.  Make changes on the laptop and deploy.
   you do).  Don't close the dashboard window during a lesson.
 - **Everyone shares one screen and one mouse.**  Agree who is driving.
 - **Uploads** are checked before they are saved: only `turtle`, `math`,
-  `random`, `time` and `colorsys` can be imported, and files, `eval`,
+  `random`, `time`, `colorsys` and `photo_tools` can be imported, and files, `eval`,
   `exec` and similar are refused.  Student programs run as the user
   `plotstudent`, who can't use the plotter or change any files, and are
   stopped after 20-25 seconds.
 - Uploads collect in `/opt/ax4plotter/uploads/`.  Delete old ones by hand
   when the list gets long.
+- **Photo programs** (`from photo_tools import load_photo`, the Pixels in
+  Ink portrait): the student picks the photo in the upload page's Photo box
+  along with the .py.  It is saved in `uploads/<program>_photos/`.  The
+  plotter uses its own copy of `photo_tools.py`; `preview()` does nothing
+  there, and capitals in the photo's name don't matter.  JPG/PNG only, up
+  to 15 MB (no HEIC).
 - The Open dialog is the plain Linux one.  It starts in the uploads folder.
 
 ## Physical STOP button (optional)
