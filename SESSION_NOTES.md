@@ -415,3 +415,31 @@ show_numbers`. The plotter now runs it:
   plotter has no GitHub fetch; students use the upload page's Photo box.
 - Real student portrait.py checked offline: 1262 strokes, no errors.
   Not yet tried on the Pi.
+
+## Corner origin, 1 mm per step (2026-10-27)
+Problem: student_example/portrait.py (real student code, committed) uses
+`setworldcoordinates(0, -SHEET_H, SHEET_W, 0)`: 1 unit = 1 mm, 0,0 at the
+top-left, drawing right and down. The dashboard assumed 0,0 = sheet centre
+and 0.25 mm per step, so it plotted 50 x 34 mm in the lower-right quarter.
+Teacher decision: the plotter origin matches turtle 0,0, at a corner.
+- `grbl_backend.drawable_area(origin, paper, margin)` replaces
+  `usable_half`. Returns (xmin, xmax, ymin, ymax) from the origin. The pen
+  is set margin_mm (10) in from the corner, so the area is the sheet less
+  10 mm all round: top_left = (0, 259.4, -195.9, 0), bottom_left =
+  (0, 259.4, 0, 195.9). `GrblBackend.move` refuses anything outside it.
+- Config key `origin` ("top_left" default, or "bottom_left"); dashboard has
+  an "Origin corner" radio pair. Changing it clears the origin.
+- `dashboard_logic.STEP_MM` = 1.0 (was 0.25). Fit to paper scales from the
+  origin; `wrong_side()` detects drawings that go the wrong way from 0,0
+  (no scale fixes it): Plot blocked with an "above the origin" message.
+- Typed text starts at the origin; pen-test zigzags and calibration L are
+  centred in the area; Change pen goes to the front middle of the area;
+  SVG export uses the sheet rectangle.
+- `photo_tools.fit_to_sheet` now returns LEFT = TOP = 0 and SHEET 259 x 195
+  mm. **Teacher will copy this to the student repo.**
+- `plotter.py` live (Thonny direct) path: same backend limits, still 0.25
+  mm per step - not updated to 1 mm (legacy path).
+- The student's own bug: `box()` draws up from y, so row 0 pokes 5 mm above
+  0,0 and Plot is refused. Starting at `y = -size` fixes it: 200 x 135 mm at
+  100%, Fit gives 129%. Template window is 278 x 215; the plotter area is
+  259 x 195, so drawings that fill the window will be refused.

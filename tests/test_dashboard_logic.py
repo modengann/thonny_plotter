@@ -16,38 +16,54 @@ sys.path.insert(0, HERE)
 
 import dashboard_logic as logic
 from fake_grbl import FakeGrbl
-from grbl_backend import GrblBackend, usable_half
+from grbl_backend import GrblBackend, drawable_area
 
-HALF = usable_half()                     # (129.7, 97.95)
+AREA = drawable_area()                   # (0, 259.4, -195.9, 0): top-left
+UP = drawable_area("bottom_left")        # (0, 259.4, 0, 195.9)
 SAMPLES = os.path.join(HERE, "samples")
 
 
 class TestScale(unittest.TestCase):
 
-    def test_100_percent_is_quarter_mm_per_step(self):
+    def test_100_percent_is_one_mm_per_step(self):
         self.assertEqual(logic.to_mm([[(0, 0), (100, -40)]], 100),
-                         [[(0.0, 0.0), (25.0, -10.0)]])
+                         [[(0.0, 0.0), (100.0, -40.0)]])
 
     def test_200_percent_doubles(self):
-        self.assertEqual(logic.to_mm([[(0, 0), (100, 0)]], 200)[0][1], (50.0, 0.0))
+        self.assertEqual(logic.to_mm([[(0, 0), (100, 0)]], 200)[0][1], (200.0, 0.0))
 
     def test_fits_and_inside(self):
-        self.assertTrue(logic.fits([[(0, 0), (129.7, 97.95)]], HALF))
-        self.assertFalse(logic.fits([[(0, 0), (130, 0)]], HALF))
-        self.assertFalse(logic.inside((0, -98), HALF))
+        self.assertTrue(logic.fits([[(0, 0), (259.4, -195.9)]], AREA))
+        self.assertFalse(logic.fits([[(0, 0), (260, 0)]], AREA))
+        self.assertFalse(logic.inside((0, 1), AREA))      # above the origin
+        self.assertTrue(logic.inside((0, 1), UP))
+        self.assertFalse(logic.inside((-1, 10), UP))
 
     def test_fit_scale_uses_the_tighter_axis(self):
-        # x extent 600 steps -> 129.7 / (600*0.25) = 86.4%; y 100 -> 391%
-        self.assertEqual(logic.fit_scale([[(-600, 0), (600, 100)]], HALF), 86)
+        # x 600 steps -> 259.4 / 600 = 43.2%; y -100 -> 195.9%
+        self.assertEqual(logic.fit_scale([[(0, 0), (600, -100)]], AREA), 43)
 
     def test_fit_scale_result_actually_fits(self):
-        strokes = [[(-333, -271), (517, 389)]]
-        pct = logic.fit_scale(strokes, HALF)
-        self.assertTrue(logic.fits(logic.to_mm(strokes, pct), HALF))
-        self.assertFalse(logic.fits(logic.to_mm(strokes, pct + 1), HALF))
+        strokes = [[(3, -271), (517, -38)]]
+        pct = logic.fit_scale(strokes, AREA)
+        self.assertTrue(logic.fits(logic.to_mm(strokes, pct), AREA))
+        self.assertFalse(logic.fits(logic.to_mm(strokes, pct + 1), AREA))
 
     def test_fit_scale_is_capped(self):
-        self.assertEqual(logic.fit_scale([[(0, 0), (1, 0)]], HALF), logic.MAX_SCALE)
+        self.assertEqual(logic.fit_scale([[(0, 0), (1, 0)]], AREA), logic.MAX_SCALE)
+
+    def test_wrong_side_of_the_origin_cannot_fit(self):
+        up_right = [[(0, 0), (100, 0), (100, 100)]]
+        self.assertTrue(logic.wrong_side(up_right, AREA))
+        self.assertIsNone(logic.fit_scale(up_right, AREA))
+        self.assertFalse(logic.wrong_side(up_right, UP))
+        self.assertEqual(logic.fit_scale(up_right, UP), 195)
+
+    def test_student_portrait_fits_at_its_own_size(self):
+        # 40 x 27 cells of 5 mm from 0,0, drawn down and to the right
+        grid = [[(0, 0), (200, 0), (200, -135), (0, -135), (0, 0)]]
+        self.assertTrue(logic.fits(logic.to_mm(grid, 100), AREA))
+        self.assertEqual(logic.fit_scale(grid, AREA), 129)
 
     def test_size(self):
         self.assertEqual(logic.size_mm([[(-10, 5), (30, -15)]]), (40, 20))
@@ -56,12 +72,12 @@ class TestScale(unittest.TestCase):
 class TestEmpty(unittest.TestCase):
 
     def test_empty_drawing(self):
-        self.assertEqual(logic.fit_scale([], HALF), 100)
+        self.assertEqual(logic.fit_scale([], AREA), 100)
         self.assertEqual(logic.size_mm([]), (0, 0))
         self.assertEqual(logic.estimate_seconds([], 1500, 3000), 0)
         c = logic.Checklist({"pen_setup_done": "2026-10-04"})
         c.connected = c.origin_set = True
-        self.assertEqual(logic.plot_blocker(c, [], HALF),
+        self.assertEqual(logic.plot_blocker(c, [], AREA),
                          "Nothing to plot - open a student file first.")
 
 
@@ -112,7 +128,8 @@ class TestChecklist(unittest.TestCase):
         self.assertFalse(c.can_plot)
         self.assertEqual(c.problems(), [
             "Connect to the plotter.",
-            "Set the origin (head over the centre of the sheet)."])
+            "Set the origin (pen 10 mm in from the top-left corner of "
+            "the sheet)."])
 
     def test_pen_setup_required(self):
         c = logic.Checklist({})
@@ -130,9 +147,16 @@ class TestChecklist(unittest.TestCase):
     def test_blocker_for_off_paper(self):
         c = logic.Checklist({"pen_setup_done": "x"})
         c.connected = c.origin_set = True
-        self.assertEqual(logic.plot_blocker(c, [[(0, 0), (200, 0)]], HALF),
+        self.assertEqual(logic.plot_blocker(c, [[(0, 0), (300, 0)]], AREA),
                          "Drawing doesn't fit - use Fit to paper or a smaller scale.")
-        self.assertIsNone(logic.plot_blocker(c, [[(0, 0), (20, 0)]], HALF))
+        self.assertIsNone(logic.plot_blocker(c, [[(0, 0), (20, 0)]], AREA))
+
+    def test_blocker_for_wrong_side_of_origin(self):
+        c = logic.Checklist({"pen_setup_done": "x"})
+        c.connected = c.origin_set = True
+        msg = logic.plot_blocker(c, [[(0, 0), (20, 30)]], AREA)
+        self.assertIn("above", msg)
+        self.assertIn("top-left origin", msg)
 
 
 class TestCalibration(unittest.TestCase):
@@ -152,14 +176,16 @@ class TestCalibration(unittest.TestCase):
             logic.calibration_result(80.0, 15.0, 150.0)
 
     def test_calibration_l_fits_and_is_150mm(self):
-        s = logic.calibration_strokes()
-        self.assertTrue(logic.fits(s, HALF))
+        s = logic.calibration_strokes(AREA)
+        self.assertTrue(logic.fits(s, AREA))
+        self.assertTrue(logic.fits(logic.calibration_strokes(UP), UP))
         corner, x_end, y_end = s[0][1], s[0][0], s[0][2]
         self.assertEqual(x_end[0] - corner[0], 150)
         self.assertEqual(y_end[1] - corner[1], 150)
 
     def test_zigzag_is_three_separate_strokes_40mm_wide(self):
-        z = logic.zigzag_strokes()
+        z = logic.zigzag_strokes(AREA)
+        self.assertTrue(logic.fits(z, AREA))
         self.assertEqual(len(z), 3)
         self.assertEqual(logic.size_mm(z)[0], 40)
 
@@ -186,36 +212,44 @@ class TestPlotStrokes(unittest.TestCase):
 
 class TestSvg(unittest.TestCase):
 
-    def test_centre_maps_to_middle_of_sheet(self):
-        text = logic.svg_text([[(0, 0), (10, 10)]])
+    def test_origin_is_10mm_in_from_the_top_left(self):
+        text = logic.svg_text([[(0, 0), (10, -10)]], AREA, 10)
         self.assertIn('width="279.4mm"', text)
-        self.assertIn("M 139.700,107.950 L 149.700,97.950", text)
+        self.assertIn('height="215.9mm"', text)
+        self.assertIn("M 10.000,10.000 L 20.000,20.000", text)
+
+    def test_bottom_left_origin_in_svg(self):
+        text = logic.svg_text([[(0, 0)]], UP, 10)
+        self.assertIn("M 10.000,205.900", text)
 
 
 class TestText(unittest.TestCase):
 
-    def test_text_is_centred_on_the_origin(self):
-        strokes, missing = logic.text_strokes("Kim")
+    def test_text_starts_at_the_origin_and_goes_into_the_sheet(self):
+        strokes, missing = logic.text_strokes("Kim", AREA)
         self.assertEqual(missing, [])
         xs = [x for s in strokes for x, _ in s]
         ys = [y for s in strokes for _, y in s]
-        self.assertAlmostEqual((min(xs) + max(xs)) / 2, 0)
-        self.assertAlmostEqual((min(ys) + max(ys)) / 2, 0)
+        self.assertAlmostEqual(min(xs), 0)
+        self.assertAlmostEqual(max(ys), 0)
+        self.assertTrue(logic.fits(strokes, AREA))
+        up, _ = logic.text_strokes("Kim", UP)
+        self.assertAlmostEqual(min(y for s in up for _, y in s), 0)
 
     def test_capitals_are_15mm_tall_at_100_percent(self):
-        strokes, _ = logic.text_strokes("I")
+        strokes, _ = logic.text_strokes("I", AREA)
         self.assertAlmostEqual(logic.size_mm(logic.to_mm(strokes, 100))[1], 15)
 
     def test_unknown_characters_are_listed_once(self):
-        strokes, missing = logic.text_strokes("Room 12!1")
+        strokes, missing = logic.text_strokes("Room 12!1", AREA)
         self.assertEqual(missing, ["!", "1", "2"])
         self.assertEqual(strokes, [])
 
     def test_empty_text_draws_nothing(self):
-        self.assertEqual(logic.text_strokes(""), ([], []))
+        self.assertEqual(logic.text_strokes("", AREA), ([], []))
 
     def test_hangeul_blocks_work(self):
-        strokes, missing = logic.text_strokes("김세정")
+        strokes, missing = logic.text_strokes("김세정", AREA)
         self.assertEqual(missing, [])
         self.assertTrue(strokes)
 

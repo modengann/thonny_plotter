@@ -88,9 +88,9 @@ class PenSetupWizard(Wizard):
         if not self.b.origin_set:
             self.step("Step 4 of 4 - test\n\n"
                       "The test draws in the middle of the sheet, so the "
-                      "plotter needs to know where the middle is.\n\n"
+                      "plotter needs to know where the sheet is.\n\n"
                       "Close this window.  Use the arrow buttons to move the "
-                      "head over the centre of the sheet and click "
+                      "pen to the origin corner of the sheet and click "
                       "'Set origin here'.  Then open Pen setup again and "
                       "choose 'skip to test'.",
                       [("Close", self.destroy)])
@@ -102,7 +102,7 @@ class PenSetupWizard(Wizard):
 
     def s4_draw(self):
         self.step("Drawing the test...", [])
-        self.dash.start_job(logic.zigzag_strokes(), "Pen test",
+        self.dash.start_job(logic.zigzag_strokes(self.dash.area), "Pen test",
                             on_done=self.s5)
 
     def s5(self):
@@ -161,8 +161,8 @@ class CalibrationWizard(Wizard):
         self.new = None
         if not (dash.check.pen_setup_done and self.b.origin_set):
             self.step("Before calibrating: run Pen setup, put down a fresh "
-                      "sheet centred on the bed, move the head over its "
-                      "centre and click 'Set origin here'.",
+                      "sheet, move the pen to its origin corner and click "
+                      "'Set origin here'.",
                       [("Close", self.destroy)])
             return
         self.s1()
@@ -175,7 +175,8 @@ class CalibrationWizard(Wizard):
 
     def draw(self):
         self.step("Drawing...", [])
-        self.dash.start_job(logic.calibration_strokes(), "Calibration L",
+        self.dash.start_job(logic.calibration_strokes(self.dash.area),
+                            "Calibration L",
                             on_done=self.s2)
 
     def s2(self):

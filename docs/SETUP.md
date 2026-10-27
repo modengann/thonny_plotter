@@ -235,8 +235,12 @@ Every session:
 1. Click **Connect**.
 2. Put a Letter sheet on the bed, landscape, **centred on the bed** (the
    plotter only travels 210 mm front to back; the sheet is 216 mm).
-3. Use the arrow buttons to move the pen over the centre of the sheet.
-   Click **Set origin here**.
+3. Pick the **Origin corner** (Top left is the default: student drawings
+   go right and down from turtle 0,0). Use the arrow buttons to move the
+   pen about 10 mm in from that corner of the sheet. Click
+   **Set origin here**. Turtle 0,0 is now that point and 1 turtle step is
+   1 mm at 100%. A drawing that goes the wrong way from 0,0 shows red and
+   can't be plotted.
 4. **Open student file...**, check the preview and messages, adjust
    **Scale %** or click **Fit to paper**, then **Plot**.
 5. **STOP** lifts the pen and stops at once. Set the origin again after it.
@@ -249,7 +253,7 @@ this is done.
 
 Running `Plotter(live=True)` from Thonny instead of the dashboard: the AX4
 resets when a program connects, so **wherever the pen is when the program
-starts becomes the centre of the paper**. Move it to the centre first
+starts becomes 0,0** (the origin corner). Move it there first
 (dashboard arrows, then Disconnect), especially after a program crashed
 part-way.
 

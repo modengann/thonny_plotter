@@ -341,7 +341,7 @@ class Plotter(turtle.Turtle):
         # hardware first, then screen, so the pen never runs ahead of code
         grbl = getattr(self, "grbl", None)
         if grbl is not None:
-            # AX4: paper coordinates, origin at the paper centre, no clamp
+            # AX4: mm from the origin corner (config "origin"), no clamp
             grbl.pen(down)
             try:
                 grbl.move(end[0] * self.scale, end[1] * self.scale,
@@ -445,11 +445,12 @@ class Plotter(turtle.Turtle):
         separate from connect() and must be called on purpose.
         """
         if getattr(self, "grbl", None) is not None:
-            # The AX4 has no homing: wherever the pen is now is the centre.
+            # The AX4 has no homing: wherever the pen is now is 0,0.
             self.grbl.pen(False)
             self.grbl.set_origin()
-            print("Ready.  The pen's current position is the centre of "
-                  "the paper.")
+            corner = "top-left" if self.grbl.limits[3] <= 0 else "bottom-left"
+            print("Ready.  The pen's current position is 0,0 - it should "
+                  "be near the %s corner of the paper." % corner)
             return
 
         if self.ser is None:

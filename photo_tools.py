@@ -25,8 +25,8 @@ import os
 import sys
 
 PHOTO_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photos")
-SHEET_WIDTH = 500
-SHEET_HEIGHT = 350
+SHEET_WIDTH = 259      # mm the plotter can draw: Letter paper, landscape,
+SHEET_HEIGHT = 195     # less 10 mm all round. 1 turtle step = 1 mm.
 SLOW_COLUMNS = 60      # above this, warn: slow on screen, long on the plotter
 MAX_COLUMNS = 200      # above this, refuse
 IMAGE_TYPES = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic", ".heif")
@@ -222,17 +222,17 @@ def show_numbers(pixels, name="pixels"):
 
 def fit_to_sheet(pixels):
     """
-    Return SIZE, LEFT, TOP so the whole grid fits the sheet, centered.
+    Return SIZE, LEFT, TOP so the whole grid fits the sheet.
         SIZE, LEFT, TOP = fit_to_sheet(pixels)
+    The grid starts at 0, 0 (the plotter's top-left origin) and goes
+    right and down, so LEFT and TOP are both 0.
     (x, y) of a cell's bottom-left corner is then
         x = LEFT + col * SIZE
         y = TOP - (row + 1) * SIZE
     """
     rows, columns = len(pixels), len(pixels[0])
     size = min(SHEET_WIDTH / columns, SHEET_HEIGHT / rows)
-    left = -size * columns / 2
-    top = size * rows / 2
-    return size, left, top
+    return size, 0, 0
 
 
 def preview(pixels, scale=None):

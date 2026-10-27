@@ -1,9 +1,11 @@
 """
 grbl_backend.py  -  talks to a GRBL pen plotter (the IKRANBIRD AX4).
 
-Coordinates are millimetres on the paper with 0,0 at the paper centre.
-The AX4 has no homing switches, so 0,0 is wherever the head was when
-set_origin() ran.  Moves outside the paper are refused, never clamped.
+Coordinates are millimetres from the origin, which sits margin_mm in from
+the top-left (or bottom-left) corner of the sheet; +X is right, +Y is up
+the sheet.  The AX4 has no homing switches, so 0,0 is wherever the head was
+when set_origin() ran.  Moves off the drawable area are refused, never
+clamped.
 
 Facts this relies on (measured 2026-10-04, see docs/HARDWARE_NOTES.md):
   * opening the port resets the board; "Grbl 0.9i ..." follows ~1.5 s later
@@ -38,9 +40,19 @@ class PlotStopped(PlotterError):
     """Raised inside a running plot when STOP was pressed."""
 
 
-def usable_half(paper=LETTER_MM, margin=10.0):
-    """Half-width and half-height of the drawable area, in mm."""
-    return ((paper[0] - 2 * margin) / 2, (paper[1] - 2 * margin) / 2)
+ORIGINS = ("top_left", "bottom_left")
+
+
+def drawable_area(origin="top_left", paper=LETTER_MM, margin=10.0):
+    """(xmin, xmax, ymin, ymax) in mm from the origin.  The pen is set
+    margin mm in from that corner, so the area is the sheet less a margin
+    on every side.  Top-left: drawings go right and down (y negative)."""
+    w, h = paper[0] - 2 * margin, paper[1] - 2 * margin
+    if origin == "top_left":
+        return (0.0, w, -h, 0.0)
+    if origin == "bottom_left":
+        return (0.0, w, 0.0, h)
+    raise ValueError("origin must be one of %s" % (ORIGINS,))
 
 
 def find_grbl_port():
@@ -74,7 +86,8 @@ class GrblBackend:
         self.pen_down_s = int(config.get("pen_down_s", 80))
         self.pen_touch_s = int(config.get("pen_touch_s", 60))
         self.servo_wait = float(config.get("servo_wait_s", 0.3))
-        self.limits = usable_half(margin=float(config.get("margin_mm", 10.0)))
+        self.limits = drawable_area(config.get("origin", "top_left"),
+                                    margin=float(config.get("margin_mm", 10.0)))
         self._opener = opener
         self.ser = None
         self.firmware = None
@@ -212,25 +225,25 @@ class GrblBackend:
     # ---- motion ---------------------------------------------------------
 
     def move(self, x, y, feed):
-        hx, hy = self.limits
-        if abs(x) > hx + 1e-6 or abs(y) > hy + 1e-6:
+        x0, x1, y0, y1 = self.limits
+        if not (x0 - 1e-6 <= x <= x1 + 1e-6 and y0 - 1e-6 <= y <= y1 + 1e-6):
             raise PlotterError(
-                "A move to (%.1f, %.1f) mm is off the paper (the limit is "
-                "+/-%.1f x +/-%.1f mm)." % (x, y, hx, hy))
+                "A move to (%.1f, %.1f) mm is off the paper (x must be %.1f "
+                "to %.1f, y %.1f to %.1f mm)." % (x, y, x0, x1, y0, y1))
         self._cmd("G1 X%.3f Y%.3f F%d" % (x, y, feed))
 
     def wait(self):
         self._cmd("G4 P0")
 
     def set_origin(self):
-        """The head's current position becomes the paper centre."""
+        """The head's current position becomes 0,0 (the origin corner)."""
         self._cmd("G4 P0")
         self._cmd("G92 X0 Y0")
         self.origin_set = True
 
     def jog(self, dx, dy, feed=1500):
         """Relative move with the pen up.  Not bounds-checked: used to find
-        the centre of the sheet before the origin exists."""
+        the origin corner of the sheet before the origin exists."""
         self.pen(False)
         self._cmd("G91")
         try:

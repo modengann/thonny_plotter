@@ -18,7 +18,8 @@ from tkinter import filedialog, messagebox, ttk
 
 import dashboard_logic as logic
 import stop_button
-from grbl_backend import GrblBackend, LETTER_MM, PlotStopped, usable_half
+from grbl_backend import (GrblBackend, LETTER_MM, ORIGINS, PlotStopped,
+                          drawable_area)
 from plotter import PlotterError, load_config, save_config
 
 PX_PER_MM = 2.0
@@ -61,10 +62,10 @@ class Dashboard:
         root.title("AX4 Plotter")
         self.raw_config = load_config()
         self.config = logic.ax4_config(self.raw_config)
-        self.half = usable_half(margin=float(self.config["margin_mm"]))
         self.backend = backend or GrblBackend(self.config)
         self.port = None             # None = find the CH340 automatically
         self.check = logic.Checklist(self.config)
+        self._set_area()
         self.strokes = []            # turtle units from the student file
         self.result = None
         self.path = None
@@ -133,7 +134,8 @@ class Dashboard:
         goto = ttk.Frame(left)
         goto.pack()
         self.goto_buttons = []
-        # corners of the dashed drawable area; +Y is the top of the sheet
+        # corners of the dashed drawable area; +Y is the top of the sheet;
+        # -1 / 1 pick the low / high edge, 0 is the origin
         for text, fx, fy, row, col in (("Top L", -1, 1, 0, 0),
                                        ("Top R", 1, 1, 0, 2),
                                        ("Origin", 0, 0, 1, 1),
@@ -143,6 +145,15 @@ class Dashboard:
                            command=lambda fx=fx, fy=fy: self.on_goto(fx, fy))
             b.grid(row=row, column=col)
             self.goto_buttons.append(b)
+        ttk.Label(left, text="Origin corner").pack(pady=(10, 0))
+        self.origin_var = tk.StringVar(value=self.config["origin"])
+        self.origin_radios = []
+        for value in ORIGINS:
+            rb = ttk.Radiobutton(left, text=logic.corner_name(value).capitalize(),
+                                 value=value, variable=self.origin_var,
+                                 command=self.on_origin_corner)
+            rb.pack(anchor="w")
+            self.origin_radios.append(rb)
         self.btn_origin = ttk.Button(left, text="Set origin here",
                                      command=self.on_set_origin)
         self.btn_pen_up = ttk.Button(left, text="Pen up",
@@ -276,7 +287,7 @@ class Dashboard:
             self.banner.grid_remove()
 
         mm = self.strokes_mm()
-        blocker = logic.plot_blocker(c, mm, self.half)
+        blocker = logic.plot_blocker(c, mm, self.area)
         idle = not self.plotting and not self.jogging
         ready = c.connected and idle
         self.btn_connect.config(text="Disconnect" if c.connected else "Connect",
@@ -286,6 +297,8 @@ class Dashboard:
                      else "disabled")
         for b in self.goto_buttons:
             b.config(state="normal" if ready and c.origin_set else "disabled")
+        for b in self.origin_radios:
+            b.config(state="normal" if idle else "disabled")
         for b in [self.btn_origin, self.btn_pen_up,
                   self.btn_pen_down, self.btn_change,
                   self.btn_pen_setup, self.btn_calibrate]:
@@ -303,24 +316,22 @@ class Dashboard:
         cv = self.canvas
         cv.delete("all")
         k = PX_PER_MM
-        ox = 10 + LETTER_MM[0] * k / 2
-        oy = 10 + LETTER_MM[1] * k / 2
+        left, right, bottom, top = logic.sheet_rect(self.area, self.margin)
 
         def px(x, y):
-            return ox + x * k, oy - y * k
+            return 10 + (x - left) * k, 10 + (top - y) * k
 
-        cv.create_rectangle(*px(-LETTER_MM[0] / 2, LETTER_MM[1] / 2),
-                            *px(LETTER_MM[0] / 2, -LETTER_MM[1] / 2),
+        cv.create_rectangle(*px(left, top), *px(right, bottom),
                             fill="white", outline="#999")
-        hx, hy = self.half
-        cv.create_rectangle(*px(-hx, hy), *px(hx, -hy), outline="#9bd",
+        x0, x1, y0, y1 = self.area
+        cv.create_rectangle(*px(x0, y1), *px(x1, y0), outline="#9bd",
                             dash=(4, 3))
         cv.create_line(*px(-4, 0), *px(4, 0), fill="#c33")
         cv.create_line(*px(0, -4), *px(0, 4), fill="#c33")
         greyed = bool(self.result and self.result.get("error"))
         for s in mm:
             for a, b in zip(s, s[1:]):
-                bad = not (logic.inside(a, self.half) and logic.inside(b, self.half))
+                bad = not (logic.inside(a, self.area) and logic.inside(b, self.area))
                 colour = "red" if bad else ("#999" if greyed else "black")
                 cv.create_line(*px(*a), *px(*b), fill=colour,
                                width=2 if bad else 1)
@@ -342,6 +353,14 @@ class Dashboard:
         self.info.config(text="\n".join(lines))
 
     # ---- helpers used by the wizards ----------------------------------
+
+    def _set_area(self):
+        """The drawable area for the chosen origin corner; the backend
+        refuses moves outside it."""
+        self.margin = float(self.config["margin_mm"])
+        self.area = drawable_area(self.config["origin"], margin=self.margin)
+        self.backend.limits = self.area
+        self.check.origin = self.config["origin"]
 
     def save_setting(self, **values):
         self.raw_config.update(values)
@@ -413,7 +432,9 @@ class Dashboard:
         """Travel to the origin (0, 0) or a corner of the drawable area."""
         if self.plotting or self.jogging or not self.backend.origin_set:
             return
-        x, y = fx * self.half[0], fy * self.half[1]
+        x0, x1, y0, y1 = self.area
+        x = {-1: x0, 0: 0.0, 1: x1}[fx]
+        y = {-1: y0, 0: 0.0, 1: y1}[fy]
         feed = self.config["travel_feed"]
 
         def go():
@@ -443,11 +464,24 @@ class Dashboard:
         self._worker = threading.Thread(target=work, daemon=True)
         self._worker.start()
 
+    def on_origin_corner(self):
+        """A different corner: the old origin no longer means anything."""
+        value = self.origin_var.get()
+        if value == self.config["origin"]:
+            return
+        self.save_setting(origin=value)
+        self._set_area()
+        self.backend.origin_set = False
+        self.check.origin_set = False
+        self.refresh()
+
     def on_set_origin(self):
         if messagebox.askokcancel(
                 "Set origin",
-                "Is the sheet centred on the plotter bed, and the pen over "
-                "the centre of the sheet?", parent=self.root):
+                "Is the pen about %d mm in from the %s corner of the sheet?\n"
+                "That point is 0,0 in the students' turtle programs."
+                % (self.margin, logic.corner_name(self.config["origin"])),
+                parent=self.root):
             self._try(self.backend.set_origin)
 
     def on_pen(self, down):
@@ -462,10 +496,11 @@ class Dashboard:
 
         def go():
             self.backend.pen(False)
-            self.backend.move(0.0, -self.half[1], feed)
+            x0, x1, y0, y1 = self.area
+            self.backend.move((x0 + x1) / 2, y0, feed)   # front of the sheet
             self.backend.wait()
             messagebox.showinfo("Change pen", "Swap the pen, then click OK.\n"
-                                "The head will go back to the centre.",
+                                "The head will go back to the origin.",
                                 parent=self.root)
             self.backend.move(0.0, 0.0, feed)
             self.backend.wait()
@@ -522,7 +557,7 @@ class Dashboard:
         text = self.text.get().strip()
         if not text:
             return
-        strokes, missing = logic.text_strokes(text)
+        strokes, missing = logic.text_strokes(text, self.area)
         if missing:
             messagebox.showerror(
                 "Text", "The plotter's font has no letter for: %s\n"
@@ -541,7 +576,15 @@ class Dashboard:
         self.refresh()
 
     def on_fit(self):
-        self.scale.set(logic.fit_scale(self.strokes, self.half))
+        pct = logic.fit_scale(self.strokes, self.area)
+        if pct is None:
+            messagebox.showinfo(
+                "Fit to paper", "Part of the drawing is on the wrong side of "
+                "the origin, so no size fits.  Check the origin corner, or "
+                "the program should draw from 0,0 into the sheet.",
+                parent=self.root)
+            return
+        self.scale.set(pct)
         self.refresh()
 
     def on_reset_scale(self):
@@ -550,7 +593,7 @@ class Dashboard:
 
     def on_plot(self):
         mm = self.strokes_mm()
-        if logic.plot_blocker(self.check, mm, self.half):
+        if logic.plot_blocker(self.check, mm, self.area):
             return
         name = os.path.basename(self.path) if self.path else "drawing"
         self.start_job(mm, "Plotting " + name)
@@ -718,7 +761,7 @@ class Dashboard:
         if not path:
             return
         with open(path, "w", encoding="utf-8") as f:
-            f.write(logic.svg_text(self.strokes_mm()))
+            f.write(logic.svg_text(self.strokes_mm(), self.area, self.margin))
         self.status.config(text="Saved " + path)
 
     def on_close(self):

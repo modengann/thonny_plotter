@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
 from fake_grbl import FakeGrbl, BANNER
-from grbl_backend import GrblBackend, PlotStopped, usable_half
+from grbl_backend import GrblBackend, PlotStopped, drawable_area
 from plotter import PlotterError
 
 
@@ -28,10 +28,21 @@ def connected(fake=None, **cfg):
 
 class TestPaper(unittest.TestCase):
 
-    def test_letter_usable_area(self):
-        hx, hy = usable_half()
-        self.assertAlmostEqual(hx, 129.7)
-        self.assertAlmostEqual(hy, 97.95)
+    def test_top_left_origin_draws_right_and_down(self):
+        x0, x1, y0, y1 = drawable_area()
+        self.assertEqual((x0, y1), (0, 0))
+        self.assertAlmostEqual(x1, 259.4)
+        self.assertAlmostEqual(y0, -195.9)
+
+    def test_bottom_left_origin_draws_right_and_up(self):
+        x0, x1, y0, y1 = drawable_area("bottom_left")
+        self.assertEqual((x0, y0), (0, 0))
+        self.assertAlmostEqual(x1, 259.4)
+        self.assertAlmostEqual(y1, 195.9)
+
+    def test_unknown_origin_is_refused(self):
+        with self.assertRaises(ValueError):
+            drawable_area("centre")
 
 
 class TestConnect(unittest.TestCase):
@@ -125,13 +136,26 @@ class TestMotion(unittest.TestCase):
     def test_move_off_paper_raises_and_sends_nothing(self):
         b, fake = connected()
         with self.assertRaises(PlotterError) as cm:
-            b.move(130.0, 0, 1500)
+            b.move(260.0, 0, 1500)
         self.assertIn("off the paper", str(cm.exception))
         self.assertEqual(fake.sent, [])
 
+    def test_move_above_a_top_left_origin_is_off_paper(self):
+        b, fake = connected()
+        with self.assertRaises(PlotterError):
+            b.move(10, 1, 1500)
+        self.assertEqual(fake.sent, [])
+
+    def test_bottom_left_origin_allows_up_not_down(self):
+        b, fake = connected(origin="bottom_left")
+        b.move(10, 195.9, 1500)
+        with self.assertRaises(PlotterError):
+            b.move(10, -1, 1500)
+        self.assertEqual(len(fake.sent), 1)
+
     def test_move_exactly_on_the_edge_is_allowed(self):
         b, fake = connected()
-        b.move(129.7, -97.95, 1500)
+        b.move(259.4, -195.9, 1500)
         self.assertEqual(len(fake.sent), 1)
 
     def test_wait_is_g4_p0(self):
@@ -164,7 +188,7 @@ class TestReplies(unittest.TestCase):
     def test_error_reply_names_the_command(self):
         b, fake = connected(FakeGrbl(replies={"G1": ["error:22"]}))
         with self.assertRaises(PlotterError) as cm:
-            b.move(1, 1, 1500)
+            b.move(1, -1, 1500)
         self.assertIn("G1 X1.000", str(cm.exception))
         self.assertIn("error:22", str(cm.exception))
 
@@ -172,7 +196,7 @@ class TestReplies(unittest.TestCase):
         b, fake = connected(FakeGrbl(replies={"G1": ["ALARM: Abort during cycle"]}))
         b.set_origin()
         with self.assertRaises(PlotterError):
-            b.move(1, 1, 1500)
+            b.move(1, -1, 1500)
         self.assertFalse(b.origin_set)
 
     def test_read_settings(self):

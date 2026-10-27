@@ -73,12 +73,13 @@ class TestDashboard(unittest.TestCase):
             self.assertTrue(d.check.connected)
             d.backend.set_origin()
             d.check.origin_set = True
-            d.load_file(os.path.join(SAMPLES, "square.py"))
+            d.load_file(os.path.join(SAMPLES, "square_down.py"))
             self.assertEqual(str(d.btn_plot["state"]), "normal")
             d.on_plot()
             pump(root, lambda: not d.plotting)
             self.assertFalse(d.plotting)
-            self.assertIn("G1 X25.000 Y0.000 F1500", fake.sent)
+            self.assertIn("G1 X100.000 Y0.000 F1500", fake.sent)
+            self.assertIn("G1 X100.000 Y-100.000 F1500", fake.sent)
             self.assertIn("Finished in", d.status["text"])
             self.assertIn("estimated", d.status["text"])
         finally:
@@ -91,7 +92,7 @@ class TestDashboard(unittest.TestCase):
             d.on_connect()
             d.backend.set_origin()
             d.check.origin_set = True
-            d.load_file(os.path.join(SAMPLES, "square.py"))
+            d.load_file(os.path.join(SAMPLES, "square_down.py"))
             d.scale.set(1000)
             d.refresh()
             self.assertEqual(str(d.btn_plot["state"]), "disabled")
@@ -107,7 +108,7 @@ class TestSizeTooltip(unittest.TestCase):
         root, d = make(FakeGrbl())
         try:
             self.assertIsNone(d.size_tip())
-            d.load_file(os.path.join(SAMPLES, "square.py"))
+            d.load_file(os.path.join(SAMPLES, "square_down.py"))
             w, h = dashboard.logic.size_mm(d.strokes_mm())
             self.assertIn("%.0f x %.0f mm" % (w, h), d.size_tip())
             d.scale.set(50)
@@ -159,7 +160,7 @@ class TestTimerDisplay(unittest.TestCase):
             d.on_connect()
             d.backend.set_origin()
             d.check.origin_set = True
-            d.load_file(os.path.join(SAMPLES, "square.py"))
+            d.load_file(os.path.join(SAMPLES, "square_down.py"))
             d.on_plot()
             seen = []
             pump(root, lambda: (seen.append(d.status["text"]) and False)
@@ -243,11 +244,11 @@ class TestGoTo(unittest.TestCase):
         try:
             d.on_connect()
             d._try(d.backend.set_origin)
-            hx, hy = d.half
-            d.on_goto(-1, 1)
+            x0, x1, y0, y1 = d.area
+            d.on_goto(1, -1)                     # bottom right
             pump(root, lambda: not d.jogging)
-            self.assertIn("G1 X%.3f Y%.3f F3000" % (-hx, hy), fake.sent)
-            self.assertIn("X  %6.1f  Y  %6.1f" % (-hx, hy), d.pos_label["text"])
+            self.assertIn("G1 X%.3f Y%.3f F3000" % (x1, y0), fake.sent)
+            self.assertIn("X  %6.1f  Y  %6.1f" % (x1, y0), d.pos_label["text"])
             d.on_goto(0, 0)
             pump(root, lambda: not d.jogging)
             self.assertEqual(fake.sent[-2], "G1 X0.000 Y0.000 F3000")
@@ -399,7 +400,7 @@ class TestPiHost(unittest.TestCase):
                 return {"strokes": [], "warnings": [], "error": None}
 
             with mock.patch.object(dashboard.logic, "run_student", fake_run):
-                d.load_file(os.path.join(SAMPLES, "square.py"))
+                d.load_file(os.path.join(SAMPLES, "square_down.py"))
             self.assertEqual(seen["run_as"], "plotstudent")
         finally:
             close(root)

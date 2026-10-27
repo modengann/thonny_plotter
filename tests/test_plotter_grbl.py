@@ -55,8 +55,8 @@ class TestPlotterOnGrbl(unittest.TestCase):
         fake = FakeGrbl()
         p = grbl_plotter(fake)
         p.penup()
-        p.goto(0, 100)
-        self.assertEqual(fake.sent, ["G1 X0.000 Y25.000 F3000", "G4 P0"])
+        p.goto(0, -100)                      # down from a top-left origin
+        self.assertEqual(fake.sent, ["G1 X0.000 Y-25.000 F3000", "G4 P0"])
 
     def test_pendown_after_penup_lowers_the_pen(self):
         fake = FakeGrbl()
@@ -71,7 +71,7 @@ class TestPlotterOnGrbl(unittest.TestCase):
         p = grbl_plotter(fake)
         p.penup()
         with self.assertRaises(PlotterError):
-            p.goto(1000, 0)                  # 250 mm: off the Letter sheet
+            p.goto(1100, 0)                  # 275 mm: off the Letter sheet
 
     def test_refused_move_lifts_the_pen(self):
         fake = FakeGrbl()
