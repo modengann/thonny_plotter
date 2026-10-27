@@ -55,6 +55,27 @@ def drawable_area(origin="top_left", paper=LETTER_MM, margin=10.0):
     raise ValueError("origin must be one of %s" % (ORIGINS,))
 
 
+ORIENTATIONS = ("landscape", "portrait")
+
+
+def paper_mm(orientation="landscape"):
+    """The sheet's (width, height) as the drawing sees it.  The sheet
+    always lies landscape on the plotter; portrait only turns the drawing."""
+    if orientation not in ORIENTATIONS:
+        raise ValueError("orientation must be one of %s" % (ORIENTATIONS,))
+    return LETTER_MM if orientation == "landscape" else LETTER_MM[::-1]
+
+
+def plotter_area(origin="top_left", orientation="landscape", margin=10.0):
+    """drawable_area() in the plotter's own directions.  Portrait drawings
+    are turned a quarter turn: drawing x -> plotter y, drawing y -> plotter -x,
+    so the drawing's top-left is the plotter's bottom-left."""
+    x0, x1, y0, y1 = drawable_area(origin, paper_mm(orientation), margin)
+    if orientation == "portrait":
+        return (-y1, -y0, x0, x1)
+    return (x0, x1, y0, y1)
+
+
 def find_grbl_port():
     if list_ports is None:
         return None
@@ -86,8 +107,9 @@ class GrblBackend:
         self.pen_down_s = int(config.get("pen_down_s", 80))
         self.pen_touch_s = int(config.get("pen_touch_s", 60))
         self.servo_wait = float(config.get("servo_wait_s", 0.3))
-        self.limits = drawable_area(config.get("origin", "top_left"),
-                                    margin=float(config.get("margin_mm", 10.0)))
+        self.limits = plotter_area(config.get("origin", "top_left"),
+                                   config.get("orientation", "landscape"),
+                                   float(config.get("margin_mm", 10.0)))
         self._opener = opener
         self.ser = None
         self.firmware = None

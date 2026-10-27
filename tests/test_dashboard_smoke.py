@@ -256,6 +256,30 @@ class TestGoTo(unittest.TestCase):
         finally:
             close(root)
 
+    def test_portrait_turns_the_drawing_and_clears_the_origin(self):
+        fake = FakeGrbl()
+        root, d = make(fake)
+        try:
+            d.on_connect()
+            d._try(d.backend.set_origin)
+            d.orientation_var.set("portrait")
+            with mock.patch.object(dashboard.messagebox, "showinfo") as note:
+                d.on_orientation()
+            self.assertIn("bottom-left", note.call_args[0][1])
+            self.assertFalse(d.backend.origin_set)
+            self.assertGreater(int(d.canvas["height"]), int(d.canvas["width"]))
+            d._try(d.backend.set_origin)
+            d.check.origin_set = True
+            x0, x1, y0, y1 = d.area                  # 196 wide, 259 tall
+            self.assertAlmostEqual(x1, 195.9)
+            self.assertAlmostEqual(y0, -259.4)
+            d.on_goto(1, -1)                         # drawing's bottom right
+            pump(root, lambda: not d.jogging)
+            self.assertIn("G1 X%.3f Y%.3f F3000" % (-y0, x1), fake.sent)
+            self.assertIn("X  %6.1f  Y  %6.1f" % (x1, y0), d.pos_label["text"])
+        finally:
+            close(root)
+
 
 class TestTextBox(unittest.TestCase):
 

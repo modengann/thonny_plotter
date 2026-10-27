@@ -18,8 +18,8 @@ from tkinter import filedialog, messagebox, ttk
 
 import dashboard_logic as logic
 import stop_button
-from grbl_backend import (GrblBackend, LETTER_MM, ORIGINS, PlotStopped,
-                          drawable_area)
+from grbl_backend import (GrblBackend, ORIENTATIONS, ORIGINS, PlotStopped,
+                          drawable_area, paper_mm, plotter_area)
 from plotter import PlotterError, load_config, save_config
 
 PX_PER_MM = 2.0
@@ -154,6 +154,14 @@ class Dashboard:
                                  command=self.on_origin_corner)
             rb.pack(anchor="w")
             self.origin_radios.append(rb)
+        ttk.Label(left, text="Paper").pack(pady=(10, 0))
+        self.orientation_var = tk.StringVar(value=self.config["orientation"])
+        for value in ORIENTATIONS:
+            rb = ttk.Radiobutton(left, text=value.capitalize(), value=value,
+                                 variable=self.orientation_var,
+                                 command=self.on_orientation)
+            rb.pack(anchor="w")
+            self.origin_radios.append(rb)      # same rule: only when idle
         self.btn_origin = ttk.Button(left, text="Set origin here",
                                      command=self.on_set_origin)
         self.btn_pen_up = ttk.Button(left, text="Pen up",
@@ -170,11 +178,9 @@ class Dashboard:
                   self.btn_change, self.btn_pen_setup, self.btn_calibrate):
             b.pack(fill="x", pady=(8, 0))
 
-        w = int(LETTER_MM[0] * PX_PER_MM) + 20
-        h = int(LETTER_MM[1] * PX_PER_MM) + 20
-        self.canvas = tk.Canvas(r, width=w, height=h, bg="#ddd",
-                                highlightthickness=0)
+        self.canvas = tk.Canvas(r, bg="#ddd", highlightthickness=0)
         self.canvas.grid(row=1, column=1, padx=6, pady=6)
+        self._size_canvas()
 
         right = ttk.Frame(r, padding=6)
         right.grid(row=1, column=2, sticky="ns")
@@ -268,8 +274,8 @@ class Dashboard:
                  else "from start (no origin)")
         if not self.check.calibrated:
             where += "\nnot calibrated"
-        self.pos_label.config(text="X %7.1f  Y %7.1f\nmm %s"
-                              % (pos[0], pos[1], where))
+        x, y = logic.from_plotter(pos, self.config["orientation"])
+        self.pos_label.config(text="X %7.1f  Y %7.1f\nmm %s" % (x, y, where))
 
     def refresh(self):
         c = self.check
@@ -355,12 +361,20 @@ class Dashboard:
     # ---- helpers used by the wizards ----------------------------------
 
     def _set_area(self):
-        """The drawable area for the chosen origin corner; the backend
-        refuses moves outside it."""
+        """The drawable area for the chosen origin corner and paper, as the
+        drawing sees it; the backend refuses moves outside the same area
+        in the plotter's directions."""
         self.margin = float(self.config["margin_mm"])
-        self.area = drawable_area(self.config["origin"], margin=self.margin)
-        self.backend.limits = self.area
-        self.check.origin = self.config["origin"]
+        origin, orient = self.config["origin"], self.config["orientation"]
+        self.area = drawable_area(origin, paper_mm(orient), self.margin)
+        self.backend.limits = plotter_area(origin, orient, self.margin)
+        self.check.origin = origin
+        self.check.orientation = orient
+
+    def _size_canvas(self):
+        w, h = paper_mm(self.config["orientation"])
+        self.canvas.config(width=int(w * PX_PER_MM) + 20,
+                           height=int(h * PX_PER_MM) + 20)
 
     def save_setting(self, **values):
         self.raw_config.update(values)
@@ -433,8 +447,9 @@ class Dashboard:
         if self.plotting or self.jogging or not self.backend.origin_set:
             return
         x0, x1, y0, y1 = self.area
-        x = {-1: x0, 0: 0.0, 1: x1}[fx]
-        y = {-1: y0, 0: 0.0, 1: y1}[fy]
+        x, y = logic.to_plotter(({-1: x0, 0: 0.0, 1: x1}[fx],
+                                 {-1: y0, 0: 0.0, 1: y1}[fy]),
+                                self.config["orientation"])
         feed = self.config["travel_feed"]
 
         def go():
@@ -475,12 +490,36 @@ class Dashboard:
         self.check.origin_set = False
         self.refresh()
 
+    def on_orientation(self):
+        """Portrait or landscape.  The sheet stays landscape on the plotter;
+        portrait turns the drawing, so the origin moves to another corner."""
+        value = self.orientation_var.get()
+        if value == self.config["orientation"]:
+            return
+        self.save_setting(orientation=value)
+        self._set_area()
+        self._size_canvas()
+        self.backend.origin_set = False
+        self.check.origin_set = False
+        self.refresh()
+        corner = logic.plotter_corner(self.config["origin"], value)
+        turn = ("Portrait: keep the sheet landscape on the plotter.  The "
+                "drawing is turned a quarter turn, so its top is the "
+                "plotter's left edge.\n\n" if value == "portrait" else
+                "Landscape: the drawing is the right way up on the "
+                "plotter.\n\n")
+        messagebox.showinfo(
+            "Paper", turn + "The origin is now the plotter's %s corner.  "
+            "Move the pen %d mm in from that corner and click 'Set origin "
+            "here' before plotting." % (corner, self.margin), parent=self.root)
+
     def on_set_origin(self):
         if messagebox.askokcancel(
                 "Set origin",
                 "Is the pen about %d mm in from the %s corner of the sheet?\n"
                 "That point is 0,0 in the students' turtle programs."
-                % (self.margin, logic.corner_name(self.config["origin"])),
+                % (self.margin, logic.plotter_corner(
+                    self.config["origin"], self.config["orientation"])),
                 parent=self.root):
             self._try(self.backend.set_origin)
 
@@ -496,7 +535,7 @@ class Dashboard:
 
         def go():
             self.backend.pen(False)
-            x0, x1, y0, y1 = self.area
+            x0, x1, y0, y1 = self.backend.limits     # plotter's directions
             self.backend.move((x0 + x1) / 2, y0, feed)   # front of the sheet
             self.backend.wait()
             messagebox.showinfo("Change pen", "Swap the pen, then click OK.\n"
@@ -614,7 +653,9 @@ class Dashboard:
         def work():
             try:
                 logic.plot_strokes(
-                    self.backend, strokes_mm, self.config["draw_feed"],
+                    self.backend, logic.strokes_to_plotter(
+                        strokes_mm, self.config["orientation"]),
+                    self.config["draw_feed"],
                     self.config["travel_feed"],
                     progress=lambda i, n: self.events.put(("progress", i, n)))
                 self.events.put(("done",))

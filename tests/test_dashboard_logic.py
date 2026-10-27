@@ -321,5 +321,31 @@ class TestRunStudentChecks(unittest.TestCase):
         self.assertIn("PI_SETUP", r["error"]["message"])
 
 
+class TestPortrait(unittest.TestCase):
+
+    def test_drawing_right_is_plotter_up_and_drawing_down_is_plotter_right(self):
+        self.assertEqual(logic.to_plotter((10, 0), "portrait"), (0, 10))
+        self.assertEqual(logic.to_plotter((0, -10), "portrait"), (10, 0))
+        self.assertEqual(logic.to_plotter((3, 4), "landscape"), (3, 4))
+
+    def test_from_plotter_undoes_to_plotter(self):
+        p = logic.to_plotter((12.5, -40), "portrait")
+        self.assertEqual(logic.from_plotter(p, "portrait"), (12.5, -40))
+
+    def test_portrait_drawing_lands_inside_the_plotter_limits(self):
+        from grbl_backend import paper_mm, plotter_area
+        area = drawable_area("top_left", paper_mm("portrait"))
+        x0, x1, y0, y1 = area
+        corners = [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]]
+        out = logic.strokes_to_plotter(corners, "portrait")
+        limits = plotter_area("top_left", "portrait")
+        self.assertTrue(all(logic.inside(p, limits) for p in out[0]))
+
+    def test_origin_corner_names(self):
+        self.assertEqual(logic.plotter_corner("top_left", "portrait"), "bottom-left")
+        self.assertEqual(logic.plotter_corner("bottom_left", "portrait"), "bottom-right")
+        self.assertEqual(logic.plotter_corner("top_left", "landscape"), "top-left")
+
+
 if __name__ == "__main__":
     unittest.main()

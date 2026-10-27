@@ -26,7 +26,7 @@ UPLOADS = os.path.join(os.path.dirname(RUNNER), "uploads")   # Pi upload page
 
 AX4_DEFAULTS = {
     "backend": "grbl", "paper": "letter", "margin_mm": 10,
-    "origin": "top_left",
+    "origin": "top_left", "orientation": "landscape",
     "pen_touch_s": 60, "pen_down_s": 80, "servo_wait_s": 0.3,
     "draw_feed": 1500, "travel_feed": 3000,
     "pen_setup_done": None, "calibrated": None,
@@ -226,6 +226,7 @@ class Checklist:
 
     def __init__(self, config):
         self.origin = config.get("origin", "top_left")
+        self.orientation = config.get("orientation", "landscape")
         self.margin = int(config.get("margin_mm", 10))
         self.connected = False
         self.origin_set = False
@@ -240,7 +241,8 @@ class Checklist:
             out.append("Run Pen setup.")
         if not self.origin_set:
             out.append("Set the origin (pen %d mm in from the %s corner "
-                       "of the sheet)." % (self.margin, corner_name(self.origin)))
+                       "of the sheet)." % (self.margin, plotter_corner(
+                           self.origin, self.orientation)))
         return out
 
     @property
@@ -257,6 +259,31 @@ class Checklist:
 
 def corner_name(origin):
     return origin.replace("_", "-")
+
+
+def plotter_corner(origin, orientation):
+    """The corner of the sheet, as it lies on the plotter, where the origin
+    goes.  Portrait turns the drawing: its top-left is the plotter's
+    bottom-left (see grbl_backend.plotter_area)."""
+    if orientation == "portrait":
+        return {"top_left": "bottom-left", "bottom_left": "bottom-right"}[origin]
+    return corner_name(origin)
+
+
+def to_plotter(point, orientation):
+    """A drawing point (mm from the origin) in the plotter's directions."""
+    x, y = point
+    return (-y, x) if orientation == "portrait" else (x, y)
+
+
+def from_plotter(point, orientation):
+    """The plotter's position back in the drawing's directions."""
+    x, y = point
+    return (y, -x) if orientation == "portrait" else (x, y)
+
+
+def strokes_to_plotter(strokes_mm, orientation):
+    return [[to_plotter(p, orientation) for p in s] for s in strokes_mm]
 
 
 def plot_blocker(checklist, strokes_mm, area):

@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
 from fake_grbl import FakeGrbl, BANNER
-from grbl_backend import GrblBackend, PlotStopped, drawable_area
+from grbl_backend import GrblBackend, PlotStopped, drawable_area, plotter_area
 from plotter import PlotterError
 
 
@@ -43,6 +43,25 @@ class TestPaper(unittest.TestCase):
     def test_unknown_origin_is_refused(self):
         with self.assertRaises(ValueError):
             drawable_area("centre")
+
+    def test_portrait_top_left_is_the_plotters_bottom_left(self):
+        x0, x1, y0, y1 = plotter_area("top_left", "portrait")
+        self.assertEqual((x0, y0), (0, 0))
+        self.assertAlmostEqual(x1, 259.4)        # still fits the 210 mm Y travel
+        self.assertAlmostEqual(y1, 195.9)
+
+    def test_portrait_bottom_left_is_the_plotters_bottom_right(self):
+        x0, x1, y0, y1 = plotter_area("bottom_left", "portrait")
+        self.assertEqual((x1, y0), (0, 0))
+        self.assertAlmostEqual(x0, -259.4)
+
+    def test_backend_limits_follow_orientation(self):
+        b = GrblBackend({"orientation": "portrait"})
+        self.assertEqual(b.limits, plotter_area("top_left", "portrait"))
+
+    def test_unknown_orientation_is_refused(self):
+        with self.assertRaises(ValueError):
+            plotter_area("top_left", "sideways")
 
 
 class TestConnect(unittest.TestCase):

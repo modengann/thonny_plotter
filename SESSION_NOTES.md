@@ -222,6 +222,15 @@ Agreed so far:
   Plot disabled (block, don't clamp).
 - **Paper: always US Letter**, landscape, 10 mm margin -> 259 x 196 mm
   usable. AX4 Y travel is only 210 mm.
+- **Portrait mode** (dashboard "Paper" radio, config `orientation`): the
+  sheet stays landscape on the plotter; the drawing is turned a quarter
+  turn (drawing x -> plotter y, drawing y -> plotter -x), giving a
+  196 x 259 mm drawing. Drawing top-left = plotter bottom-left
+  (bottom-left origin -> plotter bottom-right). `self.area` / preview / SVG
+  / fit are in drawing directions; `backend.limits` (`plotter_area`) and
+  jog arrows are plotter directions; rotation happens in `start_job` and
+  Go-to. Switching clears the origin and pops a note naming the new corner.
+  photo_tools.py SHEET_WIDTH/HEIGHT are still landscape-only.
 - **Origin:** teacher jogs to paper centre, "Set origin here". Plot
   disabled until set (no homing on AX4).
 - **Setup checklist on startup:** connected / pen set up / origin set /
